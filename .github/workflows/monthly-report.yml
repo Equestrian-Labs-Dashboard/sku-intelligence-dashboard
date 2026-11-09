@@ -1,0 +1,56 @@
+name: Monthly SKU Intelligence Report
+
+on:
+  schedule:
+    # 08:00 Bolivia time (UTC-4), on the first day of each month.
+    - cron: '0 12 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monthly-sku-report
+  cancel-in-progress: false
+
+jobs:
+  refresh-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      PONEVA_STORE: ${{ secrets.PONEVA_STORE }}
+      PONEVA_API_TOKEN: ${{ secrets.PONEVA_API_TOKEN }}
+      SHOPIFY_API_VERSION: '2026-10'
+      REPORT_TIMEZONE: 'America/La_Paz'
+      DROPSHIP_TAGS: 'dropship,dropshipping'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Refresh Shopify SKU report
+        run: npm run refresh
+
+      - name: Save monthly snapshot to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest-report.json data/history.json
+          if git diff --cached --quiet; then
+            echo "No report changes to commit."
+          else
+            git commit -m "chore: refresh monthly SKU intelligence report"
+            git push
+          fi
