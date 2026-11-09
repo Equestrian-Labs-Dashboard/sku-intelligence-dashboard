@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fa">
+  <meta name="description" content="SKU performance, Pareto analysis, inventory prioritization and gross margin analytics.">
+  <title>SKU Intelligence Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview" aria-label="SKU Intelligence home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span class="brand-copy"><strong>SKU INTELLIGENCE</strong><small>PRODUCT ANALYTICS</small></span>
+      </a>
+
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link active" href="#overview" data-section="overview"><span class="nav-icon">◫</span> Overview</a>
+        <a class="nav-link" href="#sku-analysis" data-section="sku-analysis"><span class="nav-icon">▤</span> SKU Analysis</a>
+        <a class="nav-link" href="#margin-analysis" data-section="margin-analysis"><span class="nav-icon">◒</span> Gross Margin</a>
+        <a class="nav-link" href="#monthly-history" data-section="monthly-history"><span class="nav-icon">↗</span> Monthly History</a>
+        <a class="nav-link" href="#data-sources" data-section="data-sources"><span class="nav-icon">⌘</span> Data Sources</a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-status"><span class="status-dot" id="sidebar-status-dot"></span><div><strong id="sidebar-status-title">Checking data</strong><small id="sidebar-status-copy">Connecting to sources</small></div></div>
+        <div class="sidebar-footer">SKU INTELLIGENCE <span>v1.0.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="page-heading">
+          <div class="eyebrow">PRODUCT PERFORMANCE / INVENTORY INTELLIGENCE</div>
+          <h1>SKU Performance</h1>
+          <p>Understand product concentration, profitability and inventory priorities.</p>
+        </div>
+        <div class="topbar-actions">
+          <label class="period-control">
+            <span>REPORTING PERIOD</span>
+            <select id="period-select" aria-label="Reporting period">
+              <option value="YTD2026">2026 Year to Date</option>
+              <option value="FY2025">Full Year 2025</option>
+            </select>
+          </label>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button>
+          <button class="button button-primary" id="refresh-button" type="button"><span class="button-icon">↻</span><span>Refresh data</span></button>
+        </div>
+      </header>
+
+      <div class="demo-banner" id="demo-banner" hidden>
+        <span class="demo-banner-icon">ⓘ</span>
+        <div><strong>Preview mode</strong><span>This dashboard currently displays illustrative sample data. Connect Shopify and refresh to load real store data.</span></div>
+      </div>
+
+      <section class="section-block" id="overview">
+        <div class="section-heading-row">
+          <div><div class="eyebrow">EXECUTIVE OVERVIEW</div><h2 id="period-title">2026 Year to Date</h2></div>
+          <div class="updated-label"><span class="status-dot"></span><span id="updated-at">Awaiting first refresh</span></div>
+        </div>
+
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <div class="kpi-top"><span>UNIQUE SKUs SOLD</span><span class="kpi-icon">▦</span></div>
+            <div class="kpi-value" id="kpi-unique">—</div>
+            <div class="kpi-foot"><span class="muted">Distinct product codes</span><span class="kpi-tag" id="kpi-unique-change">SKU count</span></div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-top"><span>SKUs GENERATING 80%</span><span class="kpi-icon">◉</span></div>
+            <div class="kpi-value" id="kpi-top80">—</div>
+            <div class="kpi-foot"><span class="muted">Of total net product sales</span><span class="kpi-tag" id="kpi-top80-share">Pareto group</span></div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-top"><span>NET PRODUCT SALES</span><span class="kpi-icon">＄</span></div>
+            <div class="kpi-value" id="kpi-sales">—</div>
+            <div class="kpi-foot"><span class="muted">After discounts and refunds</span><span class="kpi-tag">Excl. tax & shipping</span></div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-top"><span>GROSS MARGIN</span><span class="kpi-icon">◒</span></div>
+            <div class="kpi-value" id="kpi-margin">—</div>
+            <div class="kpi-foot"><span class="muted">Including dropshipping</span><span class="kpi-tag" id="kpi-margin-coverage">Cost coverage —</span></div>
+          </article>
+        </div>
+
+        <article class="panel period-comparison-panel">
+          <div class="comparison-heading"><div><div class="eyebrow">YEAR-OVER-YEAR VIEW</div><h3>FY 2025 vs. 2026 YTD</h3><p>Compare catalog breadth and the number of SKUs required to generate 80% of net sales.</p></div><span class="panel-chip">DIFFERENT PERIOD LENGTHS</span></div>
+          <div class="comparison-metrics">
+            <div class="comparison-metric"><span>Unique SKUs sold</span><div><strong id="compare-unique-fy">—</strong><i>→</i><strong id="compare-unique-ytd">—</strong></div><small id="compare-unique-delta">—</small></div>
+            <div class="comparison-metric"><span>SKUs generating 80%</span><div><strong id="compare-top-fy">—</strong><i>→</i><strong id="compare-top-ytd">—</strong></div><small id="compare-top-delta">—</small></div>
+            <div class="comparison-metric"><span>Top-80 group / total SKU base</span><div><strong id="compare-share-fy">—</strong><i>→</i><strong id="compare-share-ytd">—</strong></div><small id="compare-share-delta">—</small></div>
+            <div class="comparison-insight"><span class="insight-icon">↗</span><div><strong id="compare-insight-title">—</strong><p id="compare-insight-copy">—</p></div></div>
+          </div>
+        </article>
+
+        <div class="overview-grid">
+          <article class="panel pareto-panel">
+            <div class="panel-header">
+              <div><div class="eyebrow">SALES CONCENTRATION</div><h3>Pareto 80/20 Analysis</h3><p>Top products ranked by net sales contribution.</p></div>
+              <span class="panel-chip">80% THRESHOLD</span>
+            </div>
+            <div class="pareto-summary">
+              <div><strong id="pareto-count">—</strong><span>SKUs reach 80%</span></div>
+              <div class="pareto-summary-divider"></div>
+              <div><strong id="pareto-rest">—</strong><span>SKUs make up the rest</span></div>
+            </div>
+            <div class="chart-legend"><span><i class="legend-square"></i> Net sales</span><span><i class="legend-line"></i> Cumulative share</span></div>
+            <div class="chart-wrap" id="pareto-chart-wrap"><svg id="pareto-chart" viewBox="0 0 900 280" role="img" aria-label="Pareto chart of top selling SKUs"></svg></div>
+            <div class="chart-footnote">Showing the highest-contributing SKUs. The cumulative line is measured against total period net sales.</div>
+          </article>
+
+          <article class="panel concentration-panel">
+            <div class="panel-header"><div><div class="eyebrow">PRODUCT MIX</div><h3>Sales Contribution</h3><p>How the catalog is distributed.</p></div><span class="more-dot">•••</span></div>
+            <div class="donut-area">
+              <div class="donut-chart" id="donut-chart"><div class="donut-center"><strong id="donut-total">—</strong><span>UNIQUE SKUs</span></div></div>
+              <div class="donut-legend">
+                <div><i class="dot-dark"></i><span>Top 80% group</span><strong id="donut-top-count">—</strong></div>
+                <div><i class="dot-light"></i><span>Remaining group</span><strong id="donut-rest-count">—</strong></div>
+              </div>
+            </div>
+            <div class="concentration-note"><span class="note-icon">↗</span><div><strong id="concentration-insight">—</strong><p>SKU concentration helps identify products that deserve consistent stock availability.</p></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block" id="sku-analysis">
+        <div class="section-heading-row section-heading-compact">
+          <div><div class="eyebrow">PRODUCT-LEVEL PERFORMANCE</div><h2>SKU Analysis</h2><p class="section-subtitle">Find the products driving sales and prioritize inventory decisions.</p></div>
+          <div class="table-actions"><button class="button button-secondary" id="export-button" type="button">↓ Export CSV</button></div>
+        </div>
+        <div class="panel table-panel">
+          <div class="table-toolbar">
+            <div class="table-title"><strong>Product performance</strong><span id="table-count">— SKUs</span></div>
+            <div class="table-filters">
+              <div class="search-box"><span>⌕</span><input id="sku-search" type="search" placeholder="Search SKU or product" aria-label="Search SKU or product"></div>
+              <select id="action-filter" aria-label="Filter by inventory action"><option value="ALL">All actions</option><option value="CORE STOCK">Core stock</option><option value="DROPSHIP">Dropship</option><option value="LOW PRIORITY">Low priority</option><option value="REVIEW RETURNS">Review returns</option></select>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>RANK</th><th>PRODUCT / SKU</th><th>UNITS SOLD</th><th>NET SALES</th><th>SALES SHARE</th><th>CUMULATIVE</th><th>GROSS MARGIN</th><th>AVAILABLE</th><th>INVENTORY ACTION</th></tr></thead>
+              <tbody id="sku-table-body"><tr><td colspan="9" class="empty-cell">Loading product data…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="table-footer"><span id="table-footnote">SKU values are distinct product identifiers, not units sold.</span><span id="table-pagination">—</span></div>
+        </div>
+      </section>
+
+      <section class="section-block" id="margin-analysis">
+        <div class="section-heading-row section-heading-compact">
+          <div><div class="eyebrow">PROFITABILITY ANALYSIS</div><h2>Gross Margin & Dropshipping</h2><p class="section-subtitle">Compare margin performance with and without dropship products.</p></div>
+        </div>
+        <div class="margin-grid">
+          <article class="panel margin-card">
+            <div class="margin-card-heading"><span class="margin-icon">＋</span><div><strong>Including Dropshipping</strong><small>All classified products</small></div></div>
+            <div class="margin-number" id="margin-with">—</div>
+            <div class="margin-progress"><span id="margin-with-bar"></span></div>
+            <div class="margin-metrics"><div><span>Gross profit</span><strong id="profit-with">—</strong></div><div><span>Net sales with known cost</span><strong id="sales-with">—</strong></div></div>
+          </article>
+          <article class="panel margin-card">
+            <div class="margin-card-heading"><span class="margin-icon margin-icon-light">−</span><div><strong>Excluding Dropshipping</strong><small>Stocked products only</small></div></div>
+            <div class="margin-number" id="margin-without">—</div>
+            <div class="margin-progress"><span id="margin-without-bar"></span></div>
+            <div class="margin-metrics"><div><span>Gross profit</span><strong id="profit-without">—</strong></div><div><span>Net sales with known cost</span><strong id="sales-without">—</strong></div></div>
+          </article>
+          <article class="panel impact-card">
+            <div class="eyebrow">DROPSHIPPING IMPACT</div>
+            <div class="impact-number" id="margin-impact">—</div>
+            <div class="impact-label">percentage-point difference</div>
+            <div class="impact-divider"></div>
+            <p id="impact-copy">The difference between gross margin including and excluding dropshipping.</p>
+            <div class="coverage-row"><span>Cost data coverage</span><strong id="cost-coverage">—</strong></div>
+          </article>
+        </div>
+        <div class="data-caveat"><span>!</span><div><strong>Cost methodology</strong><p id="cost-methodology">Gross margin is calculated using current Shopify unit costs. Historical unit costs are not reconstructed, so historical margin is an estimate unless cost history is supplied separately.</p></div></div>
+      </section>
+
+      <section class="section-block" id="monthly-history">
+        <div class="section-heading-row section-heading-compact">
+          <div><div class="eyebrow">PERIOD-OVER-PERIOD TRACKING</div><h2>Monthly History</h2><p class="section-subtitle">Track SKU counts and Pareto concentration as monthly snapshots accumulate.</p></div>
+          <span class="panel-chip">LAST 36 SNAPSHOTS</span>
+        </div>
+        <div class="history-grid">
+          <article class="panel history-panel"><div class="panel-header"><div><h3>Unique SKU Trend</h3><p>Monthly snapshot comparison.</p></div><span class="chart-unit">SKU COUNT</span></div><div class="chart-wrap history-chart-wrap"><svg id="history-chart" viewBox="0 0 900 250" role="img" aria-label="Monthly unique SKU history"></svg></div><div class="history-legend"><span><i class="history-line-dark"></i> 2026 YTD</span><span><i class="history-line-light"></i> FY 2025</span></div></article>
+          <article class="panel history-summary"><div class="eyebrow">LATEST SNAPSHOT</div><h3 id="history-month">No snapshots yet</h3><div class="history-stat"><span>2026 YTD unique SKUs</span><strong id="history-ytd-count">—</strong></div><div class="history-stat"><span>2026 YTD Pareto SKUs</span><strong id="history-ytd-pareto">—</strong></div><div class="history-stat"><span>FY 2025 unique SKUs</span><strong id="history-fy-count">—</strong></div><p class="history-hint" id="history-hint">A snapshot is saved automatically when the monthly GitHub Action runs.</p></article>
+        </div>
+      </section>
+
+      <section class="section-block" id="data-sources">
+        <div class="section-heading-row section-heading-compact"><div><div class="eyebrow">CONNECTION STATUS</div><h2>Data Sources</h2><p class="section-subtitle">Review connected systems and data readiness.</p></div></div>
+        <div class="source-grid">
+          <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">S</div><span class="source-state" id="shopify-state">Checking</span></div><h3>Shopify</h3><p>Primary source for orders, SKU details, product tags, inventory availability and current unit costs.</p><div class="source-detail"><span>Store</span><strong id="shopify-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="shopify-connection">Awaiting credentials</strong></div></article>
+          <article class="panel source-card"><div class="source-card-top"><div class="source-logo poneva-logo">P</div><span class="source-state source-state-pending" id="poneva-state">Pending</span></div><h3>Poneva</h3><p>Secondary validation source. The account-specific sales reporting endpoint or a sample export is required before enabling live reconciliation.</p><div class="source-detail"><span>Store ID</span><strong id="poneva-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="poneva-connection">API contract required</strong></div></article>
+          <article class="panel source-card methodology-card"><div class="source-card-top"><div class="source-logo method-logo">ƒ</div><span class="source-state source-state-neutral">Methodology</span></div><h3>Calculation Rules</h3><ul><li>Unique SKU values, counted once per period.</li><li>Pareto based on net product sales.</li><li>Refunds are assigned to their refund date.</li><li>Gross margin uses available unit-cost data.</li><li>Dropshipping uses configured tags or line properties.</li></ul></article>
+        </div>
+      </section>
+
+      <footer class="page-footer"><span>SKU INTELLIGENCE DASHBOARD</span><span>Product analytics · Inventory decisions · Profitability</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

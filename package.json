@@ -1,0 +1,15 @@
+{
+  "name": "sku-intelligence-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SKU performance, Pareto analysis, inventory prioritization and gross margin dashboard.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "refresh": "node scripts/refresh.mjs",
+    "test": "node --test"
+  }
+}
