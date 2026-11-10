@@ -90,3 +90,7 @@ GitHub Actions refreshes and stores the JSON files in the private repository. It
 ## 9. Poneva
 
 This version connects the two Shopify stores directly. Poneva is not configured as a sales source because its account-specific reporting API contract has not been verified. Do not add guessed Poneva endpoints or credentials to this workflow.
+
+## Shopify query-cost protection
+
+The Shopify connector uses smaller order pages (5 orders per request), up to 100 line items per order, and bounded refund/inventory subqueries to reduce GraphQL query cost below Shopify's 1,000-point single-query ceiling. If an order exceeds a nested line-item limit, refresh stops with a clear error rather than silently creating an incomplete SKU report. Unusually large orders require a Shopify GraphQL bulk export.

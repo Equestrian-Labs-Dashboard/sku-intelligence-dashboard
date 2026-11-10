@@ -12,7 +12,8 @@ const ORDER_QUERY = `
         cancelledAt
         currencyCode
         tags
-        lineItems(first: 250) {
+        lineItems(first: 100) {
+          pageInfo { hasNextPage }
           nodes {
             id
             sku
@@ -29,7 +30,7 @@ const ORDER_QUERY = `
               inventoryItem {
                 id
                 unitCost { amount currencyCode }
-                inventoryLevels(first: 20) {
+                inventoryLevels(first: 1) {
                   nodes {
                     quantities(names: ["available"]) { name quantity }
                   }
@@ -48,7 +49,7 @@ const ORDER_QUERY = `
               lineItem { id sku title }
             }
           }
-          transactions(first: 20) { nodes { kind status } }
+          transactions(first: 5) { nodes { kind status } }
         }
       }
     }
@@ -98,12 +99,24 @@ async function fetchOrdersBySearch(config, search) {
   let hasNextPage = true;
 
   while (hasNextPage) {
+    // Small pages keep the calculated GraphQL query cost below Shopify's
+    // 1,000-point single-query ceiling while preserving order pagination.
     const result = await shopifyGraphql(config, ORDER_QUERY, {
-      first: 100,
+      first: 5,
       after,
       search
     });
-    for (const order of result.nodes || []) orders.set(order.id, order);
+    for (const order of result.nodes || []) {
+      if (order.lineItems?.pageInfo?.hasNextPage) {
+        throw new Error(`Order ${order.name || order.id} has more than 100 line items. A Shopify bulk export is required to avoid omitting SKU lines.`);
+      }
+      for (const refund of order.refunds || []) {
+        if (refund.refundLineItems?.pageInfo?.hasNextPage) {
+          throw new Error(`Order ${order.name || order.id} has more than 50 refund lines in one refund. A Shopify bulk export is required for a complete report.`);
+        }
+      }
+      orders.set(order.id, order);
+    }
     hasNextPage = Boolean(result.pageInfo?.hasNextPage);
     after = result.pageInfo?.endCursor || null;
   }
