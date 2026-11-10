@@ -94,3 +94,7 @@ This version connects the two Shopify stores directly. Poneva is not configured 
 ## Shopify query-cost protection
 
 The Shopify connector uses smaller order pages (5 orders per request), up to 100 line items per order, and bounded refund/inventory subqueries to reduce GraphQL query cost below Shopify's 1,000-point single-query ceiling. If an order exceeds a nested line-item limit, refresh stops with a clear error rather than silently creating an incomplete SKU report. Unusually large orders require a Shopify GraphQL bulk export.
+
+## Large Shopify order exports
+
+The Shopify connector uses GraphQL Bulk Operations for order retrieval. This avoids the 1,000-point single-query ceiling and supports orders with more than 100 line items. The workflow waits for Shopify to finish each export, downloads the JSONL result, and reconstructs orders and line items before running the SKU analysis. The Shopify custom app must have the required order, product, and inventory-item read scopes; historical orders also require Shopify approval for `read_all_orders`.

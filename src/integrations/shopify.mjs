@@ -1,10 +1,11 @@
 import { assertShopifyConfig } from '../config.mjs';
 
-const ORDER_QUERY = `
-  query OrdersForSkuReport($first: Int!, $after: String, $search: String!) {
-    orders(first: $first, after: $after, query: $search) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
+const BULK_QUERY = (search) => `
+{
+  orders(query: ${JSON.stringify(search)}, first: 250) {
+    edges {
+      node {
+        __typename
         id
         name
         createdAt
@@ -12,123 +13,160 @@ const ORDER_QUERY = `
         cancelledAt
         currencyCode
         tags
-        lineItems(first: 100) {
-          pageInfo { hasNextPage }
-          nodes {
-            id
-            sku
-            title
-            quantity
-            currentQuantity
-            discountedTotalSet { shopMoney { amount currencyCode } }
-            discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount currencyCode } }
-            priceAfterAllDiscountsBeforeTaxesSet { shopMoney { amount currencyCode } }
-            customAttributes { key value }
-            product { id title tags productType vendor }
-            variant {
+        lineItems(first: 250) {
+          edges {
+            node {
+              __typename
+              id
               sku
-              inventoryItem {
-                id
-                unitCost { amount currencyCode }
-                inventoryLevels(first: 1) {
-                  nodes {
-                    quantities(names: ["available"]) { name quantity }
-                  }
+              title
+              quantity
+              currentQuantity
+              discountedTotalSet { shopMoney { amount currencyCode } }
+              discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount currencyCode } }
+              priceAfterAllDiscountsBeforeTaxesSet { shopMoney { amount currencyCode } }
+              customAttributes { key value }
+              product { id title tags productType vendor }
+              variant {
+                sku
+                inventoryItem {
+                  id
+                  unitCost { amount currencyCode }
                 }
               }
             }
           }
         }
         refunds {
+          __typename
           id
           createdAt
           refundLineItems(first: 250) {
-            nodes {
-              quantity
-              subtotalSet { shopMoney { amount currencyCode } }
-              lineItem { id sku title }
+            edges {
+              node {
+                __typename
+                quantity
+                subtotalSet { shopMoney { amount currencyCode } }
+                lineItem { id sku title }
+              }
             }
           }
-          transactions(first: 5) { nodes { kind status } }
+          transactions(first: 20) { edges { node { kind status } } }
         }
       }
     }
   }
-`;
+}`;
 
-async function shopifyGraphql(config, query, variables, attempt = 0) {
+async function graphql(config, query, variables = {}) {
   const url = `https://${config.shopifyStore}/admin/api/${config.shopifyApiVersion}/graphql.json`;
-  let response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': config.shopifyAccessToken
-      },
-      body: JSON.stringify({ query, variables })
-    });
-  } catch (error) {
-    throw new Error(`Could not reach Shopify: ${error.message}`);
-  }
-
-  if ((response.status === 429 || response.status >= 500) && attempt < 3) {
-    const retryAfter = Number(response.headers.get('retry-after'));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : (2 ** attempt) * 1000;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 15000)));
-    return shopifyGraphql(config, query, variables, attempt + 1);
-  }
-
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': config.shopifyAccessToken
+    },
+    body: JSON.stringify({ query, variables })
+  });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`Shopify API returned HTTP ${response.status}: ${JSON.stringify(body).slice(0, 700)}`);
+  if (!response.ok) throw new Error(`Shopify API HTTP ${response.status}: ${JSON.stringify(body).slice(0, 800)}`);
+  if (body.errors?.length) throw new Error(`Shopify GraphQL error: ${body.errors.map((e) => e.message).join('; ')}`);
+  return body.data;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runBulkQuery(config, search) {
+  const query = BULK_QUERY(search);
+  const start = await graphql(config, `
+    mutation StartSkuBulkQuery($query: String!) {
+      bulkOperationRunQuery(query: $query) {
+        bulkOperation { id status }
+        userErrors { field message }
+      }
+    }
+  `, { query });
+
+  const result = start?.bulkOperationRunQuery;
+  if (result?.userErrors?.length) {
+    throw new Error(`Shopify could not start the bulk export: ${result.userErrors.map((e) => e.message).join('; ')}`);
   }
-  if (Array.isArray(body.errors) && body.errors.length) {
-    const message = body.errors.map((item) => item.message).join('; ');
-    throw new Error(`Shopify GraphQL error: ${message}`);
+  const operationId = result?.bulkOperation?.id;
+  if (!operationId) throw new Error('Shopify did not return a bulk operation ID.');
+
+  const startedAt = Date.now();
+  let operation;
+  while (Date.now() - startedAt < 40 * 60 * 1000) {
+    const poll = await graphql(config, `
+      query CheckSkuBulkQuery($id: ID!) {
+        node(id: $id) {
+          ... on BulkOperation {
+            id
+            status
+            errorCode
+            url
+            objectCount
+          }
+        }
+      }
+    `, { id: operationId });
+    operation = poll?.node;
+    if (!operation) throw new Error(`Shopify bulk operation ${operationId} could not be found.`);
+    if (operation.status === 'COMPLETED') break;
+    if (['FAILED', 'CANCELED', 'EXPIRED'].includes(operation.status)) {
+      throw new Error(`Shopify bulk export ${operation.status.toLowerCase()}: ${operation.errorCode || 'no error code returned'}`);
+    }
+    await sleep(2000);
   }
-  if (!body.data?.orders) {
-    throw new Error('Shopify returned an unexpected response. Check API permissions and API version.');
+
+  if (operation?.status !== 'COMPLETED') throw new Error('Shopify bulk export timed out after 40 minutes.');
+  if (!operation.url) return [];
+  const download = await fetch(operation.url);
+  if (!download.ok) throw new Error(`Could not download Shopify bulk export (HTTP ${download.status}).`);
+  const jsonl = await download.text();
+  return jsonl.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function reconstructOrders(records) {
+  const objects = new Map();
+  const roots = [];
+  for (const record of records) {
+    const clean = { ...record };
+    delete clean.__parentId;
+    if (clean.__typename === 'Order') {
+      clean.lineItems = { nodes: [] };
+      clean.refunds = [];
+      objects.set(clean.id, clean);
+      roots.push(clean);
+    } else if (clean.__typename === 'LineItem') {
+      const parent = objects.get(record.__parentId);
+      if (parent) parent.lineItems.nodes.push(clean);
+      objects.set(clean.id, clean);
+    } else if (clean.__typename === 'Refund') {
+      clean.refundLineItems = { nodes: [] };
+      clean.transactions = { nodes: clean.transactions?.edges?.map((e) => e.node) || clean.transactions?.nodes || [] };
+      const parent = objects.get(record.__parentId);
+      if (parent) parent.refunds.push(clean);
+      objects.set(clean.id, clean);
+    } else if (clean.__typename === 'RefundLineItem') {
+      const parent = objects.get(record.__parentId);
+      if (parent) parent.refundLineItems.nodes.push(clean);
+    }
   }
-  return body.data.orders;
+  return roots;
 }
 
 async function fetchOrdersBySearch(config, search) {
-  const orders = new Map();
-  let after = null;
-  let hasNextPage = true;
-
-  while (hasNextPage) {
-    // Small pages keep the calculated GraphQL query cost below Shopify's
-    // 1,000-point single-query ceiling while preserving order pagination.
-    const result = await shopifyGraphql(config, ORDER_QUERY, {
-      first: 5,
-      after,
-      search
-    });
-    for (const order of result.nodes || []) {
-      if (order.lineItems?.pageInfo?.hasNextPage) {
-        throw new Error(`Order ${order.name || order.id} has more than 100 line items. A Shopify bulk export is required to avoid omitting SKU lines.`);
-      }
-      for (const refund of order.refunds || []) {
-        if (refund.refundLineItems?.pageInfo?.hasNextPage) {
-          throw new Error(`Order ${order.name || order.id} has more than 50 refund lines in one refund. A Shopify bulk export is required for a complete report.`);
-        }
-      }
-      orders.set(order.id, order);
-    }
-    hasNextPage = Boolean(result.pageInfo?.hasNextPage);
-    after = result.pageInfo?.endCursor || null;
-  }
-
-  return [...orders.values()];
+  const records = await runBulkQuery(config, search);
+  return reconstructOrders(records);
 }
 
 export async function fetchShopifyOrdersForPeriod(config, period) {
   assertShopifyConfig(config);
   const createdSearch = `created_at:>=${period.startDate} created_at:<${period.endDateExclusive} status:any`;
   const updatedSearch = `updated_at:>=${period.startDate} updated_at:<${period.endDateExclusive} status:any`;
-
+  // Shopify permits only one active bulk query per shop at a time.
+  // Run these exports sequentially rather than concurrently.
   const createdOrders = await fetchOrdersBySearch(config, createdSearch);
   const updatedOrders = await fetchOrdersBySearch(config, updatedSearch);
   const combined = new Map();
