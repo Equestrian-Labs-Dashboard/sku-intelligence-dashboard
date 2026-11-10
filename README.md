@@ -106,3 +106,8 @@ The current Shopify Bulk export retrieves orders and all order line items. Shopi
 ## Refund ingestion compatibility
 
 Bulk Operations retrieves orders, line items, and refund identifiers. To comply with Shopify's restriction against connection fields nested inside list fields in Bulk queries, refund line-item details are fetched separately only for orders that contain refunds. This preserves refund-aware net sales without putting `refundLineItems` inside the bulk export query.
+
+
+## Customer-facing deployment
+
+Deploy the `public/` directory with Cloudflare Pages and keep the `functions/` directory at the repository root. Follow `CLOUDFLARE_PAGES_SETUP.md`. GitHub Actions remains responsible for Shopify extraction and automatically publishes protected JSON report assets for Cloudflare Pages. Do not deploy this Node.js server to GitHub Pages.

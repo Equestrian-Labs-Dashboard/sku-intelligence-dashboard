@@ -311,23 +311,7 @@ async function loadSelection() {
 async function loadDashboard() { await loadSelection(); }
 
 async function refreshData() {
-  const button = $('#refresh-button');
-  const original = button.innerHTML;
-  button.disabled = true;
-  button.innerHTML = '<span class="button-icon">↻</span><span>Refreshing…</span>';
-  try {
-    const response = await fetch('/api/refresh', { method: 'POST' });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Refresh failed.');
-    state.monthKey = result.report.month;
-    await loadSelection();
-    showToast('Both Shopify stores refreshed successfully.');
-  } catch (error) {
-    showToast(error.message);
-  } finally {
-    button.disabled = false;
-    button.innerHTML = original;
-  }
+  showToast('Data refresh runs through the scheduled GitHub Actions workflow. Ask your administrator for an on-demand refresh.');
 }
 
 function bindEvents() {

@@ -1,0 +1,107 @@
+{
+  "generatedAt": "2026-11-09T12:00:00.000Z",
+  "source": {
+    "primary": "Illustrative sample data",
+    "demo": true,
+    "shopifyConnected": false,
+    "ponevaStatus": "PENDING_API_CONTRACT"
+  },
+  "reportingTimezone": "America/La_Paz",
+  "periods": {
+    "FY2025": {
+      "period": {
+        "key": "FY2025",
+        "label": "Full Year 2025",
+        "startDate": "2025-01-01",
+        "endDateExclusive": "2026-01-01",
+        "cutoffDate": "2025-12-31"
+      },
+      "summary": {
+        "totalUniqueSkus": 500,
+        "top80SkuCount": 300,
+        "remainingSkuCount": 200,
+        "totalUnitsSold": 18420,
+        "netSales": 1284500,
+        "paretoSales": 1284500,
+        "ordersCount": 9340,
+        "missingSkuLines": 0,
+        "dropshipSkuCount": 82,
+        "currency": "USD"
+      },
+      "grossMargin": {
+        "withDropshipping": { "netSales": 1284500, "netSalesWithKnownCost": 1284500, "costOfGoodsSold": 733365, "grossProfit": 551135, "grossMargin": 42.9, "costCoveragePct": 100 },
+        "withoutDropshipping": { "netSales": 1050000, "netSalesWithKnownCost": 1050000, "costOfGoodsSold": 572250, "grossProfit": 477750, "grossMargin": 45.5, "costCoveragePct": 100 },
+        "dropshippingImpactPp": -2.6
+      },
+      "skuRows": [
+        { "sku": "SKU-1001", "productTitle": "Classic Everyday Backpack", "category": "Bags", "vendor": "Northline", "unitsSold": 820, "netSales": 73800, "costOfGoodsSold": 36900, "grossProfit": 36900, "grossMargin": 50, "salesShare": 5.75, "cumulativeShare": 5.75, "rank": 1, "isTop80": true, "isDropship": false, "inventoryAvailable": 145, "action": "CORE STOCK" },
+        { "sku": "SKU-1002", "productTitle": "Minimal Travel Bottle", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 790, "netSales": 67150, "costOfGoodsSold": 33575, "grossProfit": 33575, "grossMargin": 50, "salesShare": 5.23, "cumulativeShare": 10.98, "rank": 2, "isTop80": true, "isDropship": false, "inventoryAvailable": 82, "action": "CORE STOCK" },
+        { "sku": "SKU-1003", "productTitle": "Soft Knit Crewneck", "category": "Apparel", "vendor": "Studio One", "unitsSold": 620, "netSales": 58900, "costOfGoodsSold": 35340, "grossProfit": 23560, "grossMargin": 40, "salesShare": 4.59, "cumulativeShare": 15.57, "rank": 3, "isTop80": true, "isDropship": false, "inventoryAvailable": 36, "action": "CORE STOCK" },
+        { "sku": "SKU-1004", "productTitle": "Weekend Canvas Tote", "category": "Bags", "vendor": "Northline", "unitsSold": 580, "netSales": 52200, "costOfGoodsSold": 26100, "grossProfit": 26100, "grossMargin": 50, "salesShare": 4.06, "cumulativeShare": 19.63, "rank": 4, "isTop80": true, "isDropship": false, "inventoryAvailable": 210, "action": "CORE STOCK" },
+        { "sku": "SKU-1005", "productTitle": "Wireless Desk Lamp", "category": "Home", "vendor": "Bright Works", "unitsSold": 410, "netSales": 49200, "costOfGoodsSold": 29520, "grossProfit": 19680, "grossMargin": 40, "salesShare": 3.83, "cumulativeShare": 23.46, "rank": 5, "isTop80": true, "isDropship": true, "inventoryAvailable": 0, "action": "DROPSHIP" },
+        { "sku": "SKU-1006", "productTitle": "Compact Organizer Set", "category": "Home", "vendor": "Form Studio", "unitsSold": 390, "netSales": 42900, "costOfGoodsSold": 21450, "grossProfit": 21450, "grossMargin": 50, "salesShare": 3.34, "cumulativeShare": 26.80, "rank": 6, "isTop80": true, "isDropship": false, "inventoryAvailable": 64, "action": "CORE STOCK" },
+        { "sku": "SKU-1007", "productTitle": "Lightweight Running Cap", "category": "Sportswear", "vendor": "Motion Lab", "unitsSold": 360, "netSales": 32400, "costOfGoodsSold": 16200, "grossProfit": 16200, "grossMargin": 50, "salesShare": 2.52, "cumulativeShare": 29.32, "rank": 7, "isTop80": true, "isDropship": false, "inventoryAvailable": 18, "action": "CORE STOCK" },
+        { "sku": "SKU-1008", "productTitle": "Ceramic Coffee Set", "category": "Home", "vendor": "Clay & Co.", "unitsSold": 270, "netSales": 29700, "costOfGoodsSold": 17820, "grossProfit": 11880, "grossMargin": 40, "salesShare": 2.31, "cumulativeShare": 31.63, "rank": 8, "isTop80": true, "isDropship": false, "inventoryAvailable": 92, "action": "CORE STOCK" },
+        { "sku": "SKU-1009", "productTitle": "Everyday Crossbody Bag", "category": "Bags", "vendor": "Northline", "unitsSold": 250, "netSales": 27500, "costOfGoodsSold": 13750, "grossProfit": 13750, "grossMargin": 50, "salesShare": 2.14, "cumulativeShare": 33.77, "rank": 9, "isTop80": true, "isDropship": false, "inventoryAvailable": 44, "action": "CORE STOCK" },
+        { "sku": "SKU-1010", "productTitle": "Foldable Storage Rack", "category": "Home", "vendor": "Bright Works", "unitsSold": 190, "netSales": 24700, "costOfGoodsSold": 16055, "grossProfit": 8645, "grossMargin": 35, "salesShare": 1.92, "cumulativeShare": 35.69, "rank": 10, "isTop80": true, "isDropship": true, "inventoryAvailable": 0, "action": "DROPSHIP" },
+        { "sku": "SKU-1011", "productTitle": "Travel Pouch Trio", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 180, "netSales": 19800, "costOfGoodsSold": 9900, "grossProfit": 9900, "grossMargin": 50, "salesShare": 1.54, "cumulativeShare": 37.23, "rank": 11, "isTop80": true, "isDropship": false, "inventoryAvailable": 12, "action": "CORE STOCK" },
+        { "sku": "SKU-1012", "productTitle": "Soft Cotton Throw", "category": "Home", "vendor": "Studio One", "unitsSold": 160, "netSales": 17600, "costOfGoodsSold": 10560, "grossProfit": 7040, "grossMargin": 40, "salesShare": 1.37, "cumulativeShare": 38.60, "rank": 12, "isTop80": true, "isDropship": false, "inventoryAvailable": 29, "action": "CORE STOCK" },
+        { "sku": "SKU-1090", "productTitle": "Seasonal Gift Wrap", "category": "Accessories", "vendor": "Paper House", "unitsSold": 7, "netSales": 63, "costOfGoodsSold": 21, "grossProfit": 42, "grossMargin": 66.67, "salesShare": 0.005, "cumulativeShare": 99.8, "rank": 499, "isTop80": false, "isDropship": false, "inventoryAvailable": 4, "action": "LOW PRIORITY" },
+        { "sku": "SKU-1091", "productTitle": "Clearance Phone Strap", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 4, "netSales": 28, "costOfGoodsSold": 16, "grossProfit": 12, "grossMargin": 42.86, "salesShare": 0.002, "cumulativeShare": 100, "rank": 500, "isTop80": false, "isDropship": false, "inventoryAvailable": 0, "action": "LOW PRIORITY" }
+      ],
+      "dataQuality": {
+        "missingSkuLines": 0,
+        "costBasis": "Illustrative current unit cost.",
+        "paretoBasis": "Illustrative net product sales after discounts and refunds."
+      }
+    },
+    "YTD2026": {
+      "period": {
+        "key": "YTD2026",
+        "label": "2026 Year to Date",
+        "startDate": "2026-01-01",
+        "endDateExclusive": "2026-11-10",
+        "cutoffDate": "2026-11-09"
+      },
+      "summary": {
+        "totalUniqueSkus": 620,
+        "top80SkuCount": 325,
+        "remainingSkuCount": 295,
+        "totalUnitsSold": 16150,
+        "netSales": 1168200,
+        "paretoSales": 1168200,
+        "ordersCount": 8720,
+        "missingSkuLines": 0,
+        "dropshipSkuCount": 101,
+        "currency": "USD"
+      },
+      "grossMargin": {
+        "withDropshipping": { "netSales": 1168200, "netSalesWithKnownCost": 1168200, "costOfGoodsSold": 681594, "grossProfit": 486606, "grossMargin": 41.66, "costCoveragePct": 100 },
+        "withoutDropshipping": { "netSales": 920000, "netSalesWithKnownCost": 920000, "costOfGoodsSold": 524400, "grossProfit": 395600, "grossMargin": 43, "costCoveragePct": 100 },
+        "dropshippingImpactPp": -1.34
+      },
+      "skuRows": [
+        { "sku": "SKU-1001", "productTitle": "Classic Everyday Backpack", "category": "Bags", "vendor": "Northline", "unitsSold": 760, "netSales": 68400, "costOfGoodsSold": 34200, "grossProfit": 34200, "grossMargin": 50, "salesShare": 5.86, "cumulativeShare": 5.86, "rank": 1, "isTop80": true, "isDropship": false, "inventoryAvailable": 145, "action": "CORE STOCK" },
+        { "sku": "SKU-1002", "productTitle": "Minimal Travel Bottle", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 710, "netSales": 60350, "costOfGoodsSold": 30175, "grossProfit": 30175, "grossMargin": 50, "salesShare": 5.17, "cumulativeShare": 11.03, "rank": 2, "isTop80": true, "isDropship": false, "inventoryAvailable": 82, "action": "CORE STOCK" },
+        { "sku": "SKU-1003", "productTitle": "Soft Knit Crewneck", "category": "Apparel", "vendor": "Studio One", "unitsSold": 680, "netSales": 64600, "costOfGoodsSold": 38760, "grossProfit": 25840, "grossMargin": 40, "salesShare": 5.53, "cumulativeShare": 16.56, "rank": 3, "isTop80": true, "isDropship": false, "inventoryAvailable": 36, "action": "CORE STOCK" },
+        { "sku": "SKU-1004", "productTitle": "Weekend Canvas Tote", "category": "Bags", "vendor": "Northline", "unitsSold": 510, "netSales": 45900, "costOfGoodsSold": 22950, "grossProfit": 22950, "grossMargin": 50, "salesShare": 3.93, "cumulativeShare": 20.49, "rank": 4, "isTop80": true, "isDropship": false, "inventoryAvailable": 210, "action": "CORE STOCK" },
+        { "sku": "SKU-1005", "productTitle": "Wireless Desk Lamp", "category": "Home", "vendor": "Bright Works", "unitsSold": 390, "netSales": 46800, "costOfGoodsSold": 28080, "grossProfit": 18720, "grossMargin": 40, "salesShare": 4.01, "cumulativeShare": 24.50, "rank": 5, "isTop80": true, "isDropship": true, "inventoryAvailable": 0, "action": "DROPSHIP" },
+        { "sku": "SKU-1010", "productTitle": "Foldable Storage Rack", "category": "Home", "vendor": "Bright Works", "unitsSold": 205, "netSales": 26650, "costOfGoodsSold": 17322.5, "grossProfit": 9327.5, "grossMargin": 35, "salesShare": 2.28, "cumulativeShare": 26.78, "rank": 6, "isTop80": true, "isDropship": true, "inventoryAvailable": 0, "action": "DROPSHIP" },
+        { "sku": "SKU-1011", "productTitle": "Travel Pouch Trio", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 210, "netSales": 23100, "costOfGoodsSold": 11550, "grossProfit": 11550, "grossMargin": 50, "salesShare": 1.98, "cumulativeShare": 28.76, "rank": 7, "isTop80": true, "isDropship": false, "inventoryAvailable": 12, "action": "CORE STOCK" },
+        { "sku": "SKU-1012", "productTitle": "Soft Cotton Throw", "category": "Home", "vendor": "Studio One", "unitsSold": 155, "netSales": 17050, "costOfGoodsSold": 10230, "grossProfit": 6820, "grossMargin": 40, "salesShare": 1.46, "cumulativeShare": 30.22, "rank": 8, "isTop80": true, "isDropship": false, "inventoryAvailable": 29, "action": "CORE STOCK" },
+        { "sku": "SKU-1013", "productTitle": "Insulated Lunch Bag", "category": "Bags", "vendor": "Northline", "unitsSold": 120, "netSales": 14400, "costOfGoodsSold": 7200, "grossProfit": 7200, "grossMargin": 50, "salesShare": 1.23, "cumulativeShare": 31.45, "rank": 9, "isTop80": true, "isDropship": false, "inventoryAvailable": 16, "action": "CORE STOCK" },
+        { "sku": "SKU-1014", "productTitle": "Compact Phone Stand", "category": "Accessories", "vendor": "Form Studio", "unitsSold": 95, "netSales": 8550, "costOfGoodsSold": 4275, "grossProfit": 4275, "grossMargin": 50, "salesShare": 0.73, "cumulativeShare": 32.18, "rank": 10, "isTop80": true, "isDropship": false, "inventoryAvailable": 53, "action": "CORE STOCK" }
+      ],
+      "dataQuality": {
+        "missingSkuLines": 0,
+        "costBasis": "Illustrative current unit cost.",
+        "paretoBasis": "Illustrative net product sales after discounts and refunds."
+      }
+    }
+  },
+  "notes": [
+    "All values in this file are fictional sample values for layout preview only.",
+    "Unique SKU counts use distinct SKU values, not units sold.",
+    "Pareto ranking uses net product sales after discounts and refunds."
+  ]
+}
