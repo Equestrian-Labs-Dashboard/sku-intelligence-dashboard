@@ -470,3 +470,24 @@ tbody tr:hover { background: var(--surface-soft); }
 @media (max-width: 640px) {
   .sales-bridge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.report-data-warning {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 16px;
+  padding: 13px 16px;
+  border: 1px solid #e6c58a;
+  border-radius: 11px;
+  background: #fff8e9;
+  color: #60451c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.report-data-warning strong { font-size: 13px; }
+.report-data-warning span { color: #725b36; }
+:root[data-theme="dark"] .report-data-warning {
+  background: #382e1d;
+  border-color: #6e5429;
+  color: #f1d39a;
+}
+:root[data-theme="dark"] .report-data-warning span { color: #e0c48f; }

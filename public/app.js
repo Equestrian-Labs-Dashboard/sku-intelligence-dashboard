@@ -323,7 +323,17 @@ async function loadSelection() {
     fetch('/api/health'),
     fetch(`/api/months?store=${encodeURIComponent(state.storeKey)}`)
   ]);
-  if (!reportResponse.ok) throw new Error('Could not load the selected store report.');
+  if (!reportResponse.ok) {
+    const failure = await reportResponse.json().catch(() => ({}));
+    const message = failure.error || `Could not load the selected store report (HTTP ${reportResponse.status}).`;
+    if (reportResponse.status === 409 || failure.code === 'shopifyql_refresh_required') {
+      const warning = $('#report-data-warning');
+      warning.hidden = false;
+      $('#report-data-warning-message').textContent = message;
+    }
+    throw new Error(message);
+  }
+  $('#report-data-warning').hidden = true;
   state.report = await reportResponse.json();
   state.history = historyResponse.ok ? await historyResponse.json() : { snapshots: [] };
   state.health = healthResponse.ok ? await healthResponse.json() : null;

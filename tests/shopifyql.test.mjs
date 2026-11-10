@@ -47,7 +47,14 @@ test('queries ShopifyQL for the full SKU sales bridge and paginates beyond 1,000
       data: {
         shop: { currencyCode: 'USD' },
         shopifyqlQuery: {
-          tableData: { columns: [], rows },
+          tableData: {
+            columns: [
+              'gross_sales', 'discounts', 'sales_reversals', 'net_sales',
+              'quantity_ordered', 'net_items_sold', 'reversed_quantity',
+              'product_variant_sku', 'product_title'
+            ].map((name) => ({ name, dataType: 'STRING', displayName: name })),
+            rows
+          },
           parseErrors: [],
           parseWarnings: []
         }
@@ -80,6 +87,32 @@ test('returns a clear message when ShopifyQL access is missing', async () => {
     await assert.rejects(
       () => fetchShopifySalesBySku(config, period),
       /Enable the read_reports scope/i
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test('rejects incomplete ShopifyQL columns rather than silently publishing zero metrics', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    data: {
+      shop: { currencyCode: 'USD' },
+      shopifyqlQuery: {
+        tableData: {
+          columns: [{ name: 'product_variant_sku' }, { name: 'net_sales' }],
+          rows: [{ product_variant_sku: 'SKU-1', net_sales: '100' }]
+        },
+        parseErrors: []
+      }
+    }
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+  try {
+    await assert.rejects(
+      () => fetchShopifySalesBySku(config, period),
+      /Missing columns:.*gross_sales.*discounts.*sales_reversals/
     );
   } finally {
     globalThis.fetch = originalFetch;

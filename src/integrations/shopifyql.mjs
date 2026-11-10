@@ -104,10 +104,33 @@ export async function fetchShopifySalesBySku(config, period) {
     }
 
     const columns = result.tableData.columns || [];
-    const rows = (result.tableData.rows || []).map((row) => normalizeRow(row, columns));
+    const columnNames = new Set(columns.map((column) => String(column.name || '').trim()));
+    const requiredColumns = [
+      'product_variant_sku', 'product_title', 'gross_sales', 'discounts',
+      'sales_reversals', 'net_sales', 'quantity_ordered',
+      'net_items_sold', 'reversed_quantity'
+    ];
+    const missingColumns = requiredColumns.filter((name) => !columnNames.has(name));
+    if (missingColumns.length) {
+      throw new Error(
+        `ShopifyQL returned an incomplete sales table for ${config.shopifyStore} (${period.label}). Missing columns: ${missingColumns.join(', ')}. Returned columns: ${[...columnNames].join(', ') || 'none'}. The old report has not been replaced.`
+      );
+    }
+    const rawRows = result.tableData.rows || [];
+    const rows = rawRows.map((row) => normalizeRow(row, columns));
+    if (rawRows.length && !rows.some((row) => String(row.product_variant_sku ?? '').trim())) {
+      throw new Error(`ShopifyQL returned ${rawRows.length} rows but no product_variant_sku values for ${config.shopifyStore} (${period.label}). The old report has not been replaced.`);
+    }
     for (const row of rows) {
       const sku = String(row.product_variant_sku ?? '').trim();
       if (!sku) continue;
+      const metricValues = [
+        row.gross_sales, row.discounts, row.sales_reversals, row.net_sales,
+        row.quantity_ordered, row.net_items_sold, row.reversed_quantity
+      ];
+      if (metricValues.some((value) => value === undefined || value === null || value === '')) {
+        throw new Error(`ShopifyQL returned an incomplete metric row for SKU ${sku} at ${config.shopifyStore}. Required sales and quantity metrics are missing; the old report has not been replaced.`);
+      }
       collected.push({
         sku,
         productTitle: String(row.product_title || '').trim() || sku,
