@@ -2,26 +2,31 @@ name: Monthly SKU Intelligence Report
 
 on:
   schedule:
-    # 08:00 Bolivia time (UTC-4), on the first day of each month.
+    # Runs on the first day of every month at 08:00 Bolivia time (UTC-4).
     - cron: '0 12 1 * *'
   workflow_dispatch:
+    inputs:
+      refresh_note:
+        description: 'Optional note for this manual refresh'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: monthly-sku-report
+  group: monthly-sku-intelligence
   cancel-in-progress: false
 
 jobs:
   refresh-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
-      SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
-      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-      PONEVA_STORE: ${{ secrets.PONEVA_STORE }}
-      PONEVA_API_TOKEN: ${{ secrets.PONEVA_API_TOKEN }}
+      EQUESTRIAN_SHOPIFY_STORE: ${{ secrets.EQUESTRIAN_SHOPIFY_STORE }}
+      EQUESTRIAN_SHOPIFY_TOKEN: ${{ secrets.EQUESTRIAN_SHOPIFY_TOKEN }}
+      CAVALI_SHOPIFY_STORE: ${{ secrets.CAVALI_SHOPIFY_STORE }}
+      CAVALI_SHOPIFY_TOKEN: ${{ secrets.CAVALI_SHOPIFY_TOKEN }}
       SHOPIFY_API_VERSION: '2026-10'
       REPORT_TIMEZONE: 'America/La_Paz'
       DROPSHIP_TAGS: 'dropship,dropshipping'
@@ -36,21 +41,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run automated tests
         run: npm test
 
-      - name: Refresh Shopify SKU report
+      - name: Validate both Shopify connections
+        run: |
+          test -n "$EQUESTRIAN_SHOPIFY_STORE" && test -n "$EQUESTRIAN_SHOPIFY_TOKEN"
+          test -n "$CAVALI_SHOPIFY_STORE" && test -n "$CAVALI_SHOPIFY_TOKEN"
+
+      - name: Refresh both stores and archive monthly JSON
         run: npm run refresh
 
-      - name: Save monthly snapshot to repository
+      - name: Commit monthly and annual JSON archives
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest-report.json data/history.json
+          git add data/latest-report.json data/archive/
           if git diff --cached --quiet; then
             echo "No report changes to commit."
           else
-            git commit -m "chore: refresh monthly SKU intelligence report"
+            git commit -m "chore: archive monthly SKU reports for both stores"
             git push
           fi
