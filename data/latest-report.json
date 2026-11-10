@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-11-10T00:55:16.288Z",
+  "generatedAt": "2026-11-10T01:36:26.155Z",
   "month": "2026-11",
   "stores": {
     "equestrian": {
       "name": "Equestrian Labs",
       "shopifyStore": "equestrian-labs.myshopify.com",
       "report": {
-        "generatedAt": "2026-11-10T00:55:16.288Z",
+        "generatedAt": "2026-11-10T01:36:26.155Z",
         "source": {
           "primary": "Shopify Admin GraphQL API",
           "demo": false,
@@ -133969,7 +133969,7 @@
       "name": "Cavali",
       "shopifyStore": "cavali-club.myshopify.com",
       "report": {
-        "generatedAt": "2026-11-10T00:55:16.288Z",
+        "generatedAt": "2026-11-10T01:36:26.155Z",
         "source": {
           "primary": "Shopify Admin GraphQL API",
           "demo": false,
