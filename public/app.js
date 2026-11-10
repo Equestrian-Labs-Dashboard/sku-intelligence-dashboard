@@ -70,6 +70,15 @@ function renderKpis(periodReport) {
   $('#bridge-ordered').textContent = number(summary.quantityOrdered);
   $('#bridge-net-items').textContent = number(summary.netItemsSold ?? summary.totalUnitsSold);
   $('#bridge-reversed-qty').textContent = number(summary.reversedQuantity);
+  const unassigned = summary.unassignedSkuSales || {};
+  const unassignedNote = $('#unassigned-sales-note');
+  if (Number(unassigned.rowCount) > 0) {
+    unassignedNote.hidden = false;
+    unassignedNote.textContent = `${number(unassigned.rowCount)} product sales row(s) have no variant SKU assigned. Their sales (${currency(unassigned.netSales, currencyCode)}) and quantities remain included in the totals above, but they are excluded from the unique SKU count and SKU-level ranking.`;
+  } else {
+    unassignedNote.hidden = true;
+    unassignedNote.textContent = '';
+  }
   $('#pareto-count').textContent = number(summary.totalUniqueSkus);
   $('#pareto-rest').textContent = percentage(summary.topSkuShare, 2);
   $('#donut-total').textContent = currency(summary.netSales, currencyCode);
@@ -397,6 +406,10 @@ function bindEvents() {
   });
 
   const helpContent = {
+    'unassigned-sku': {
+      title: 'Product sales without an assigned SKU',
+      body: `<p>Shopify can return a product sales row where the variant has no SKU value.</p><p>The dashboard preserves its gross sales, discounts, sales reversals, net sales and quantity values in the report totals. It does not invent a SKU code, and it excludes the row from the unique SKU count and SKU-level product ranking.</p><p>Assign a SKU to the variant in Shopify if you want future sales to be attributed to a specific SKU.</p>`
+    },
     'sku-count': {
       title: 'Unique SKUs sold',
       body: `<p>This is the number of distinct, non-empty product variant SKU codes with sales activity in the selected period.</p><p>It is not the number of units sold and it is not the number of orders. If the same SKU appears in 50 orders, it is counted once.</p><p>Shopify product-level reports can combine several variants. This dashboard counts at the variant-SKU level.</p>`

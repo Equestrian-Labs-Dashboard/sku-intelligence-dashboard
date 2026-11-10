@@ -68,11 +68,17 @@ export async function refreshAndSaveReport(config) {
       YTD2026: ytd2026Sales.rows,
       MONTH: currentMonthSales.rows
     };
+    const unassignedByPeriod = {
+      FY2025: fy2025Sales.unassigned,
+      YTD2026: ytd2026Sales.unassigned,
+      MONTH: currentMonthSales.unassigned
+    };
     const metadataOrdersByPeriod = { FY2025: fy2025Orders, YTD2026: ytd2026Orders };
     const report = buildReport(salesByPeriod, metadataOrdersByPeriod, periods, {
       dropshipTags: config.dropshipTags,
       timezone: config.reportTimezone,
-      currencyCode: currentMonthSales.currencyCode || ytd2026Sales.currencyCode || fy2025Sales.currencyCode || 'USD'
+      currencyCode: currentMonthSales.currencyCode || ytd2026Sales.currencyCode || fy2025Sales.currencyCode || 'USD',
+      unassignedByPeriod
     });
 
     report.source.shopifyStore = store.shopifyStore;
@@ -97,7 +103,8 @@ export async function refreshAndSaveReport(config) {
         {
           dropshipTags: config.dropshipTags,
           timezone: config.reportTimezone,
-          currencyCode: salesResult.currencyCode || report.periods.MONTH.summary.currency
+          currencyCode: salesResult.currencyCode || report.periods.MONTH.summary.currency,
+          unassignedSales: salesResult.unassigned
         }
       );
       const storeYearDir = join(ARCHIVE_DIR, store.key, String(year));

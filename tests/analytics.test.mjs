@@ -136,3 +136,41 @@ test('builds the requested 2025 and 2026 reporting windows', () => {
   assert.equal(periods.YTD2026.startDate, '2026-01-01');
   assert.equal(periods.YTD2026.cutoffDate, '2026-11-09');
 });
+
+
+test('keeps blank-SKU product sales in financial totals without counting them as a SKU', async () => {
+  const sales = [
+    salesRow({
+      sku: 'SKU-1',
+      grossSales: 100,
+      discounts: -10,
+      salesReversals: -5,
+      netSales: 85,
+      quantityOrdered: 2,
+      netItemsSold: 1,
+      reversedQuantity: -1
+    })
+  ];
+  const report = buildPeriodReport(sales, [], period, {
+    unassignedSales: {
+      rowCount: 1,
+      grossSales: 50,
+      discounts: -5,
+      salesReversals: -2,
+      netSales: 43,
+      quantityOrdered: 1,
+      netItemsSold: 1,
+      reversedQuantity: 0
+    }
+  });
+  assert.equal(report.summary.totalUniqueSkus, 1);
+  assert.equal(report.skuRows.length, 1);
+  assert.equal(report.summary.grossSales, 150);
+  assert.equal(report.summary.discounts, -15);
+  assert.equal(report.summary.salesReversals, -7);
+  assert.equal(report.summary.netSales, 128);
+  assert.equal(report.summary.quantityOrdered, 3);
+  assert.equal(report.summary.netItemsSold, 2);
+  assert.equal(report.summary.unassignedSkuSales.netSales, 43);
+  assert.match(report.dataQuality.unassignedSkuBasis, /blank product_variant_sku/i);
+});

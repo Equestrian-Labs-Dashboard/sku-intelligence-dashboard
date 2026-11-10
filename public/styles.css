@@ -491,3 +491,14 @@ tbody tr:hover { background: var(--surface-soft); }
   color: #f1d39a;
 }
 :root[data-theme="dark"] .report-data-warning span { color: #e0c48f; }
+
+.unassigned-sales-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--amber, #9b6b20);
+  border-radius: 9px;
+  background: var(--amber-bg, #fbf3e5);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.55;
+}

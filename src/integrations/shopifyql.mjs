@@ -22,7 +22,19 @@ function normalizeRow(row, columns = []) {
   if (Array.isArray(row)) {
     return Object.fromEntries(columns.map((column, index) => [column.name, row[index]]));
   }
-  return row && typeof row === 'object' ? row : {};
+  if (!row || typeof row !== 'object') return {};
+  const normalized = { ...row };
+  const rowKeys = Object.keys(row);
+  for (const column of columns) {
+    const canonical = String(column.name || '').trim();
+    if (!canonical || normalized[canonical] !== undefined) continue;
+    const aliases = [canonical, column.displayName]
+      .filter(Boolean)
+      .map((value) => String(value).trim().toLowerCase());
+    const match = rowKeys.find((key) => aliases.includes(key.trim().toLowerCase()));
+    if (match !== undefined) normalized[canonical] = row[match];
+  }
+  return normalized;
 }
 
 function numeric(value) {
@@ -136,6 +148,16 @@ LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 export async function fetchShopifySalesBySku(config, period) {
   assertShopifyConfig(config);
   const collected = [];
+  const unassigned = {
+    rowCount: 0,
+    grossSales: 0,
+    discounts: 0,
+    salesReversals: 0,
+    netSales: 0,
+    quantityOrdered: 0,
+    netItemsSold: 0,
+    reversedQuantity: 0
+  };
   let offset = 0;
   let currencyCode = null;
 
@@ -181,22 +203,16 @@ export async function fetchShopifySalesBySku(config, period) {
     }
     const rawRows = result.tableData.rows || [];
     const rows = rawRows.map((row) => normalizeRow(row, columns));
-    if (rawRows.length && !rows.some((row) => String(row.product_variant_sku ?? '').trim())) {
-      throw new Error(`ShopifyQL returned ${rawRows.length} rows but no product_variant_sku values for ${config.shopifyStore} (${period.label}), even after filtering line_type = 'Product'. The result may have an unexpected ShopifyQL row shape or missing SKU dimension. The old report has not been replaced.`);
-    }
     for (const row of rows) {
       const sku = String(row.product_variant_sku ?? '').trim();
-      if (!sku) continue;
       const metricValues = [
         row.gross_sales, row.discounts, row.sales_reversals, row.net_sales,
         row.quantity_ordered, row.net_items_sold, row.reversed_quantity
       ];
       if (metricValues.some((value) => value === undefined || value === null || value === '')) {
-        throw new Error(`ShopifyQL returned an incomplete metric row for SKU ${sku} at ${config.shopifyStore}. Required sales and quantity metrics are missing; the old report has not been replaced.`);
+        throw new Error(`ShopifyQL returned an incomplete metric row for SKU ${sku || '(blank SKU)'} at ${config.shopifyStore}. Required sales and quantity metrics are missing; the old report has not been replaced.`);
       }
-      collected.push({
-        sku,
-        productTitle: String(row.product_title || '').trim() || sku,
+      const metrics = {
         grossSales: numeric(row.gross_sales),
         discounts: numeric(row.discounts),
         salesReversals: numeric(row.sales_reversals),
@@ -204,6 +220,19 @@ export async function fetchShopifySalesBySku(config, period) {
         quantityOrdered: numeric(row.quantity_ordered),
         netItemsSold: numeric(row.net_items_sold),
         reversedQuantity: numeric(row.reversed_quantity)
+      };
+      if (!sku) {
+        // Shopify can return product sales with no variant SKU assigned.
+        // Preserve the financial and quantity totals separately; never invent
+        // a SKU code or count this row as a unique SKU.
+        unassigned.rowCount += 1;
+        for (const [key, value] of Object.entries(metrics)) unassigned[key] += value;
+        continue;
+      }
+      collected.push({
+        sku,
+        productTitle: String(row.product_title || '').trim() || sku,
+        ...metrics
       });
     }
 
@@ -214,5 +243,10 @@ export async function fetchShopifySalesBySku(config, period) {
     }
   }
 
-  return { rows: collected, currencyCode, querySource: 'ShopifyQL FROM sales' };
+  return {
+    rows: collected,
+    unassigned,
+    currencyCode,
+    querySource: 'ShopifyQL FROM sales'
+  };
 }

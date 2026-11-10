@@ -116,6 +116,16 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
   const metadata = metadataBySku(metadataOrders, configuredTags);
   const currency = options.currencyCode || 'USD';
   const aggregated = aggregateShopifyRows(salesRows);
+  const unassignedSales = {
+    rowCount: Number(options.unassignedSales?.rowCount) || 0,
+    grossSales: Number(options.unassignedSales?.grossSales) || 0,
+    discounts: Number(options.unassignedSales?.discounts) || 0,
+    salesReversals: Number(options.unassignedSales?.salesReversals) || 0,
+    netSales: Number(options.unassignedSales?.netSales) || 0,
+    quantityOrdered: Number(options.unassignedSales?.quantityOrdered) || 0,
+    netItemsSold: Number(options.unassignedSales?.netItemsSold) || 0,
+    reversedQuantity: Number(options.unassignedSales?.reversedQuantity) || 0
+  };
 
   const allRows = aggregated.map((sales) => {
     const meta = metadata.get(sales.sku) || {};
@@ -142,7 +152,10 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
 
   const rankedRows = allRows
     .sort((a, b) => b.netSales - a.netSales || b.netItemsSold - a.netItemsSold || a.sku.localeCompare(b.sku));
-  const totalNetSales = rankedRows.reduce((sum, row) => sum + row.netSales, 0);
+  const assignedSkuNetSales = rankedRows.reduce((sum, row) => sum + row.netSales, 0);
+  // Product sales without a SKU remain in financial totals and margin coverage,
+  // but are never invented as a SKU or included in the unique SKU count.
+  const totalNetSales = assignedSkuNetSales + unassignedSales.netSales;
   let cumulativeSales = 0;
   rankedRows.forEach((row, index) => {
     cumulativeSales += row.netSales;
@@ -153,8 +166,14 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
   });
 
   const soldRows = rankedRows.filter((row) => row.quantityOrdered > 0 || row.netItemsSold > 0);
-  const withDropshipping = marginForRows(rankedRows);
-  const withoutDropshipping = marginForRows(rankedRows.filter((row) => !row.isDropship));
+  const unassignedMarginRow = unassignedSales.rowCount > 0 ? [{
+    netSales: unassignedSales.netSales,
+    costKnownSales: 0,
+    costOfGoodsSold: 0,
+    isDropship: false
+  }] : [];
+  const withDropshipping = marginForRows([...rankedRows, ...unassignedMarginRow]);
+  const withoutDropshipping = marginForRows([...rankedRows.filter((row) => !row.isDropship), ...unassignedMarginRow]);
   const marginImpactPp = withDropshipping.grossMargin !== null && withoutDropshipping.grossMargin !== null
     ? round(withDropshipping.grossMargin - withoutDropshipping.grossMargin)
     : null;
@@ -167,14 +186,24 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
     period,
     summary: {
       totalUniqueSkus: soldRows.length,
-      totalUnitsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0), 0),
-      quantityOrdered: round(rankedRows.reduce((sum, row) => sum + row.quantityOrdered, 0), 0),
-      netItemsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0), 0),
-      reversedQuantity: round(rankedRows.reduce((sum, row) => sum + row.reversedQuantity, 0), 0),
-      grossSales: round(rankedRows.reduce((sum, row) => sum + row.grossSales, 0)),
-      discounts: round(rankedRows.reduce((sum, row) => sum + row.discounts, 0)),
-      salesReversals: round(rankedRows.reduce((sum, row) => sum + row.salesReversals, 0)),
+      totalUnitsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0) + unassignedSales.netItemsSold, 0),
+      quantityOrdered: round(rankedRows.reduce((sum, row) => sum + row.quantityOrdered, 0) + unassignedSales.quantityOrdered, 0),
+      netItemsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0) + unassignedSales.netItemsSold, 0),
+      reversedQuantity: round(rankedRows.reduce((sum, row) => sum + row.reversedQuantity, 0) + unassignedSales.reversedQuantity, 0),
+      grossSales: round(rankedRows.reduce((sum, row) => sum + row.grossSales, 0) + unassignedSales.grossSales),
+      discounts: round(rankedRows.reduce((sum, row) => sum + row.discounts, 0) + unassignedSales.discounts),
+      salesReversals: round(rankedRows.reduce((sum, row) => sum + row.salesReversals, 0) + unassignedSales.salesReversals),
       netSales: round(totalNetSales),
+      unassignedSkuSales: {
+        rowCount: unassignedSales.rowCount,
+        grossSales: round(unassignedSales.grossSales),
+        discounts: round(unassignedSales.discounts),
+        salesReversals: round(unassignedSales.salesReversals),
+        netSales: round(unassignedSales.netSales),
+        quantityOrdered: round(unassignedSales.quantityOrdered, 0),
+        netItemsSold: round(unassignedSales.netItemsSold, 0),
+        reversedQuantity: round(unassignedSales.reversedQuantity, 0)
+      },
       topSkuShare: topSku ? topSku.salesShare : 0,
       concentrationGini,
       ordersCount: null,
@@ -191,13 +220,14 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
     dataQuality: {
       salesSource: 'ShopifyQL FROM sales grouped by product_variant_sku and product_title.',
       salesBasis: 'Gross sales, discounts, sales reversals, net sales and quantities are taken directly from ShopifyQL. They are not reconstructed from order line totals.',
+      unassignedSkuBasis: 'Product sales rows with a blank product_variant_sku are retained in financial and quantity totals as unassigned SKU sales. They are excluded from the unique SKU count and SKU-level ranking; no SKU code is invented.',
       quantityBasis: 'Quantity ordered is the original quantity. Net items sold is after reversals. Reversed quantity is the quantity removed through refunds, returns, cancellations or order edits; Shopify may report it as a negative value.',
       skuCountBasis: 'Unique SKU count is the number of distinct non-empty product_variant_sku values with ordered or net item activity. It is not a unit count or order count.',
       periodBasis: 'Sales metrics follow Shopify sales-event reporting for the selected date range. Adjustments can be attributed to the date they occur, which may differ from filtering orders only by their creation date.',
       productGrouping: 'The report counts variant SKUs. A product-level Shopify report can combine multiple variants, so product totals and SKU totals are not always directly comparable.',
       costBasis: 'Gross margin uses the current Shopify unit cost where available, multiplied by net items sold. Historical unit costs are not reconstructed.',
       inventoryBasis: 'Available inventory is not currently synchronized; it is shown as unavailable rather than zero.',
-      concentrationBasis: 'The full SKU catalog is ranked by actual net sales. No fixed 80/20 distribution is assumed.'
+      concentrationBasis: 'The full assigned-SKU catalog is ranked by actual net sales. No fixed 80/20 distribution is assumed. Unassigned-SKU sales remain visible in total sales and are not attributed to a SKU.'
     }
   };
 }
@@ -209,7 +239,7 @@ export function buildReport(salesByPeriod, metadataOrdersByPeriod, periods, opti
     salesByPeriod[key] || [],
     metadata,
     periods[key],
-    options
+    { ...options, unassignedSales: options.unassignedByPeriod?.[key] || options.unassignedSales }
   );
   return {
     generatedAt: new Date().toISOString(),
@@ -229,6 +259,7 @@ export function buildReport(salesByPeriod, metadataOrdersByPeriod, periods, opti
     notes: [
       'All sales metrics are sourced directly from ShopifyQL FROM sales, grouped by product variant SKU.',
       'Distinct SKU counts are not unit counts or order counts.',
+      'Product sales rows without a variant SKU remain included in financial and quantity totals but are excluded from the unique SKU count and SKU-level ranking.',
       'Sales reversals include refunds, returns, cancellations and order edits.',
       'A product-level report may combine multiple variant SKUs.',
       'No fixed 80/20 rule is assumed; the full SKU concentration curve is calculated from actual net sales.',

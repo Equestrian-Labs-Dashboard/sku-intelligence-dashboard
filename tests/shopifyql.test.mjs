@@ -207,3 +207,49 @@ test('retries GraphQL THROTTLED responses using throttle restore information', a
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('preserves product sales with blank SKU separately instead of failing or inventing a SKU', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    data: {
+      shop: { currencyCode: 'USD' },
+      shopifyqlQuery: {
+        tableData: {
+          columns: [
+            'gross_sales', 'discounts', 'sales_reversals', 'net_sales',
+            'quantity_ordered', 'net_items_sold', 'reversed_quantity',
+            'product_variant_sku', 'product_title'
+          ].map((name) => ({ name, dataType: 'STRING', displayName: name })),
+          rows: [{
+            gross_sales: '100',
+            discounts: '-10',
+            sales_reversals: '-5',
+            net_sales: '85',
+            quantity_ordered: 2,
+            net_items_sold: 1,
+            reversed_quantity: -1,
+            product_variant_sku: '',
+            product_title: 'Product without assigned SKU'
+          }]
+        },
+        parseErrors: []
+      }
+    }
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+  try {
+    const result = await fetchShopifySalesBySku(config, period);
+    assert.equal(result.rows.length, 0);
+    assert.equal(result.unassigned.rowCount, 1);
+    assert.equal(result.unassigned.grossSales, 100);
+    assert.equal(result.unassigned.discounts, -10);
+    assert.equal(result.unassigned.salesReversals, -5);
+    assert.equal(result.unassigned.netSales, 85);
+    assert.equal(result.unassigned.quantityOrdered, 2);
+    assert.equal(result.unassigned.netItemsSold, 1);
+    assert.equal(result.unassigned.reversedQuantity, -1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
