@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "SKU performance, Pareto analysis, inventory prioritization and gross margin dashboard.",
+  "description": "Full-catalog SKU sales concentration, ShopifyQL sales metrics, inventory prioritization and gross margin dashboard.",
   "engines": {
     "node": ">=20.0.0"
   },

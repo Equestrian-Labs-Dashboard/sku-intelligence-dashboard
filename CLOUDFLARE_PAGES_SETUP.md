@@ -63,7 +63,7 @@ The report access is checked server-side on both the dashboard page and every AP
 
 The GitHub Actions workflow is already configured to:
 
-1. Refresh Equestrian Labs and Cavali from Shopify.
+1. Refresh Corro and Cavali from Shopify using ShopifyQL sales analytics and GraphQL Bulk Operations for product metadata.
 2. Save monthly JSON files under `data/archive/`.
 3. Copy the latest report and archives into `public/data/`.
 4. Generate `public/data/archive-index.json`.
@@ -88,3 +88,8 @@ Do not use GitHub Pages for this dashboard. The customer-facing site is Cloudfla
 The root dashboard and `/data/*` static JSON URLs are protected by the Pages middleware. API endpoints also independently validate the signed session and `SKU Intelligence` report permission. JavaScript and CSS are public assets; report JSON is not served directly to unauthorized visitors.
 
 The Cloudflare Pages project does not run the Shopify refresh itself. GitHub Actions remains the scheduled data pipeline. The dashboard's refresh button communicates that refresh is managed by the administrator workflow.
+
+
+## ShopifyQL permission requirement
+
+The Shopify Admin API custom app for each store must include the `read_reports` scope for the dashboard's ShopifyQL `FROM sales` query. Shopify's current `shopifyqlQuery` documentation also lists protected customer data approval requirements. Keep the existing four GitHub Secrets; if the app permissions are changed, update the token value inside the existing store-specific Secret after reinstalling/updating the Shopify app. No Shopify tokens are stored in Cloudflare Pages.

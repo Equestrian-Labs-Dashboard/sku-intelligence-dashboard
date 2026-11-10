@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8fa">
-  <meta name="description" content="SKU performance, Pareto analysis, inventory prioritization and gross margin analytics.">
+  <meta name="description" content="SKU performance, full-catalog sales concentration, inventory prioritization and gross margin analytics.">
   <title>SKU Intelligence Dashboard</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
@@ -55,6 +55,12 @@
         </div>
       </header>
 
+      <div class="report-method-banner">
+        <span class="method-icon">i</span>
+        <div><strong>How to read this report</strong><span>Sales figures use ShopifyQL sales events. Click the information icons beside metrics to understand SKU counts, units, reversals and why different Shopify views can show different totals.</span></div>
+        <button class="button button-secondary" type="button" data-help="why-different">Report methodology</button>
+      </div>
+
       <div class="demo-banner" id="demo-banner" hidden>
         <span class="demo-banner-icon">ⓘ</span>
         <div><strong>Live store reporting</strong><span>Authorized access to monthly Shopify SKU performance for Corro and Cavali.</span></div>
@@ -68,63 +74,81 @@
 
         <div class="kpi-grid">
           <article class="kpi-card">
-            <div class="kpi-top"><span>UNIQUE SKUs SOLD</span><span class="kpi-icon">▦</span></div>
+            <div class="kpi-top"><span>UNIQUE SKUs SOLD <button class="help-button" type="button" data-help="sku-count" aria-label="Explain unique SKU count">i</button></span><span class="kpi-icon">▦</span></div>
             <div class="kpi-value" id="kpi-unique">—</div>
-            <div class="kpi-foot"><span class="muted">Distinct product codes</span><span class="kpi-tag" id="kpi-unique-change">SKU count</span></div>
+            <div class="kpi-foot"><span class="muted">Distinct variant SKU codes</span><span class="kpi-tag" id="kpi-unique-change">SKU count</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span>SKUs GENERATING 80%</span><span class="kpi-icon">◉</span></div>
-            <div class="kpi-value" id="kpi-top80">—</div>
-            <div class="kpi-foot"><span class="muted">Of total net product sales</span><span class="kpi-tag" id="kpi-top80-share">Pareto group</span></div>
+            <div class="kpi-top"><span>NET ITEMS SOLD <button class="help-button" type="button" data-help="net-items" aria-label="Explain net items sold">i</button></span><span class="kpi-icon">▤</span></div>
+            <div class="kpi-value" id="kpi-net-items">—</div>
+            <div class="kpi-foot"><span class="muted">After sales reversals</span><span class="kpi-tag" id="kpi-quantity-bridge">Ordered — · Reversed —</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span>NET PRODUCT SALES</span><span class="kpi-icon">＄</span></div>
+            <div class="kpi-top"><span>NET PRODUCT SALES <button class="help-button" type="button" data-help="net-sales" aria-label="Explain net product sales">i</button></span><span class="kpi-icon">＄</span></div>
             <div class="kpi-value" id="kpi-sales">—</div>
-            <div class="kpi-foot"><span class="muted">After discounts and refunds</span><span class="kpi-tag">Excl. tax & shipping</span></div>
+            <div class="kpi-foot"><span class="muted">After discounts and sales reversals</span><span class="kpi-tag">Excl. tax & shipping</span></div>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span>GROSS MARGIN</span><span class="kpi-icon">◒</span></div>
+            <div class="kpi-top"><span>GROSS MARGIN <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></span><span class="kpi-icon">◒</span></div>
             <div class="kpi-value" id="kpi-margin">—</div>
             <div class="kpi-foot"><span class="muted">Including dropshipping</span><span class="kpi-tag" id="kpi-margin-coverage">Cost coverage —</span></div>
           </article>
         </div>
 
+        <article class="panel sales-bridge-panel">
+          <div class="panel-header">
+            <div><div class="eyebrow">SHOPIFY SALES BRIDGE <button class="help-button" type="button" data-help="why-different" aria-label="Explain Shopify sales metrics">i</button></div><h3>Sales and quantity reconciliation</h3><p>Period totals returned directly by ShopifyQL for the selected store and reporting window.</p></div>
+          </div>
+          <div class="sales-bridge-grid">
+            <div><span>Gross Sales <button class="help-button" type="button" data-help="gross-sales" aria-label="Explain gross sales">i</button></span><strong id="bridge-gross">—</strong></div>
+            <div><span>Discounts <button class="help-button" type="button" data-help="discounts" aria-label="Explain discounts">i</button></span><strong id="bridge-discounts">—</strong></div>
+            <div><span>Sales Reversals <button class="help-button" type="button" data-help="sales-reversals" aria-label="Explain sales reversals">i</button></span><strong id="bridge-reversals">—</strong></div>
+            <div><span>Net Sales <button class="help-button" type="button" data-help="net-sales" aria-label="Explain net sales">i</button></span><strong id="bridge-net">—</strong></div>
+            <div><span>Quantity Ordered <button class="help-button" type="button" data-help="quantity-ordered" aria-label="Explain quantity ordered">i</button></span><strong id="bridge-ordered">—</strong></div>
+            <div><span>Net Items Sold <button class="help-button" type="button" data-help="net-items" aria-label="Explain net items sold">i</button></span><strong id="bridge-net-items">—</strong></div>
+            <div><span>Reversed Quantity <button class="help-button" type="button" data-help="reversed-quantity" aria-label="Explain reversed quantity">i</button></span><strong id="bridge-reversed-qty">—</strong></div>
+          </div>
+        </article>
+
         <article class="panel period-comparison-panel">
-          <div class="comparison-heading"><div><div class="eyebrow">YEAR-OVER-YEAR VIEW</div><h3>FY 2025 vs. 2026 YTD</h3><p>Compare catalog breadth and the number of SKUs required to generate 80% of net sales.</p></div><span class="panel-chip">DIFFERENT PERIOD LENGTHS</span></div>
+          <div class="comparison-heading">
+            <div><div class="eyebrow">YEAR-OVER-YEAR VIEW</div><h3>Full Year 2025 vs. 2026 YTD</h3><p>Compare catalog size, item movement, revenue and sales concentration. Period lengths are different.</p></div>
+            <span class="panel-chip">FY 2025 / YTD 2026</span>
+          </div>
           <div class="comparison-metrics">
             <div class="comparison-metric"><span>Unique SKUs sold</span><div><strong id="compare-unique-fy">—</strong><i>→</i><strong id="compare-unique-ytd">—</strong></div><small id="compare-unique-delta">—</small></div>
-            <div class="comparison-metric"><span>SKUs generating 80%</span><div><strong id="compare-top-fy">—</strong><i>→</i><strong id="compare-top-ytd">—</strong></div><small id="compare-top-delta">—</small></div>
-            <div class="comparison-metric"><span>Top-80 group / total SKU base</span><div><strong id="compare-share-fy">—</strong><i>→</i><strong id="compare-share-ytd">—</strong></div><small id="compare-share-delta">—</small></div>
-            <div class="comparison-insight"><span class="insight-icon">↗</span><div><strong id="compare-insight-title">—</strong><p id="compare-insight-copy">—</p></div></div>
+            <div class="comparison-metric"><span>Net items sold</span><div><strong id="compare-units-fy">—</strong><i>→</i><strong id="compare-units-ytd">—</strong></div><small id="compare-units-delta">—</small></div>
+            <div class="comparison-metric"><span>Net product sales</span><div><strong id="compare-sales-fy">—</strong><i>→</i><strong id="compare-sales-ytd">—</strong></div><small id="compare-sales-delta">—</small></div>
+            <div class="comparison-insight"><span class="insight-icon">↗</span><div><strong id="compare-insight-title">Sales concentration</strong><p id="compare-insight-copy">The full SKU distribution is compared using its Gini concentration index.</p></div></div>
           </div>
         </article>
 
         <div class="overview-grid">
           <article class="panel pareto-panel">
             <div class="panel-header">
-              <div><div class="eyebrow">SALES CONCENTRATION</div><h3>Pareto 80/20 Analysis</h3><p>Top products ranked by net sales contribution.</p></div>
-              <span class="panel-chip">80% THRESHOLD</span>
+              <div><div class="eyebrow">SALES CONCENTRATION <button class="help-button" type="button" data-help="concentration" aria-label="Explain sales concentration">i</button></div><h3>Full SKU Sales Concentration</h3><p>Every SKU is ranked by actual net sales; the cumulative curve shows the real distribution.</p></div>
+              <span class="panel-chip">FULL CATALOG</span>
             </div>
             <div class="pareto-summary">
-              <div><strong id="pareto-count">—</strong><span>SKUs reach 80%</span></div>
+              <div><strong id="pareto-count">—</strong><span>Unique SKUs analyzed</span></div>
               <div class="pareto-summary-divider"></div>
-              <div><strong id="pareto-rest">—</strong><span>SKUs make up the rest</span></div>
+              <div><strong id="pareto-rest">—</strong><span>Top SKU share of net sales</span></div>
             </div>
-            <div class="chart-legend"><span><i class="legend-square"></i> Net sales</span><span><i class="legend-line"></i> Cumulative share</span></div>
-            <div class="chart-wrap" id="pareto-chart-wrap"><svg id="pareto-chart" viewBox="0 0 900 280" role="img" aria-label="Pareto chart of top selling SKUs"></svg></div>
-            <div class="chart-footnote">Showing the highest-contributing SKUs. The cumulative line is measured against total period net sales.</div>
+            <div class="chart-legend"><span><i class="legend-square"></i> Net sales by SKU</span><span><i class="legend-line"></i> Cumulative sales share</span></div>
+            <div class="chart-wrap" id="pareto-chart-wrap"><svg id="pareto-chart" viewBox="0 0 900 280" role="img" aria-label="Full catalog SKU sales concentration curve"></svg></div>
+            <div class="chart-footnote">The complete SKU list is used. No fixed 80/20 assumption or Top 10 cutoff is applied.</div>
           </article>
 
           <article class="panel concentration-panel">
-            <div class="panel-header"><div><div class="eyebrow">PRODUCT MIX</div><h3>Sales Contribution</h3><p>How the catalog is distributed.</p></div><span class="more-dot">•••</span></div>
+            <div class="panel-header"><div><div class="eyebrow">FULFILLMENT MIX</div><h3>Dropshipping vs. Stocked Sales</h3><p>Revenue mix based on the configured dropshipping tags.</p></div><button class="help-button" type="button" data-help="dropshipping" aria-label="Explain dropshipping classification">i</button></div>
             <div class="donut-area">
-              <div class="donut-chart" id="donut-chart"><div class="donut-center"><strong id="donut-total">—</strong><span>UNIQUE SKUs</span></div></div>
+              <div class="donut-chart" id="donut-chart"><div class="donut-center"><strong id="donut-total">—</strong><span>NET SALES</span></div></div>
               <div class="donut-legend">
-                <div><i class="dot-dark"></i><span>Top 80% group</span><strong id="donut-top-count">—</strong></div>
-                <div><i class="dot-light"></i><span>Remaining group</span><strong id="donut-rest-count">—</strong></div>
+                <div><i class="dot-dark"></i><span>Dropshipping</span><strong id="donut-top-count">—</strong></div>
+                <div><i class="dot-light"></i><span>Stocked / untagged</span><strong id="donut-rest-count">—</strong></div>
               </div>
             </div>
-            <div class="concentration-note"><span class="note-icon">↗</span><div><strong id="concentration-insight">—</strong><p>SKU concentration helps identify products that deserve consistent stock availability.</p></div></div>
+            <div class="concentration-note"><span class="note-icon">↗</span><div><strong id="concentration-insight">—</strong><p>Use the SKU table and margin comparison to decide which products to stock or fulfill through dropshipping.</p></div></div>
           </article>
         </div>
       </section>
@@ -139,16 +163,23 @@
             <div class="table-title"><strong>Product performance</strong><span id="table-count">— SKUs</span></div>
             <div class="table-filters">
               <div class="search-box"><span>⌕</span><input id="sku-search" type="search" placeholder="Search SKU or product" aria-label="Search SKU or product"></div>
-              <select id="action-filter" aria-label="Filter by inventory action"><option value="ALL">All actions</option><option value="CORE STOCK">Core stock</option><option value="DROPSHIP">Dropship</option><option value="LOW PRIORITY">Low priority</option><option value="REVIEW RETURNS">Review returns</option></select>
+              <select id="action-filter" aria-label="Filter by fulfillment classification"><option value="ALL">All products</option><option value="DROPSHIP">Dropshipping</option><option value="STOCK REVIEW">Stocked / untagged</option></select>
             </div>
           </div>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>RANK</th><th>PRODUCT / SKU</th><th>UNITS SOLD</th><th>NET SALES</th><th>SALES SHARE</th><th>CUMULATIVE</th><th>GROSS MARGIN</th><th>AVAILABLE</th><th>INVENTORY ACTION</th></tr></thead>
-              <tbody id="sku-table-body"><tr><td colspan="9" class="empty-cell">Loading product data…</td></tr></tbody>
+              <thead><tr>
+                <th>RANK</th><th>PRODUCT / SKU</th>
+                <th>QUANTITY ORDERED <button class="help-button" type="button" data-help="quantity-ordered" aria-label="Explain quantity ordered">i</button></th>
+                <th>NET ITEMS SOLD <button class="help-button" type="button" data-help="net-items" aria-label="Explain net items sold">i</button></th>
+                <th>REVERSED QTY <button class="help-button" type="button" data-help="reversed-quantity" aria-label="Explain reversed quantity">i</button></th>
+                <th>GROSS SALES <button class="help-button" type="button" data-help="gross-sales" aria-label="Explain gross sales">i</button></th><th>DISCOUNTS <button class="help-button" type="button" data-help="discounts" aria-label="Explain discounts">i</button></th><th>SALES REVERSALS <button class="help-button" type="button" data-help="sales-reversals" aria-label="Explain sales reversals">i</button></th>
+                <th>NET SALES</th><th>SALES SHARE</th><th>CUMULATIVE <button class="help-button" type="button" data-help="concentration" aria-label="Explain cumulative sales share">i</button></th><th>GROSS MARGIN <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></th><th>AVAILABLE</th><th>FULFILLMENT</th>
+              </tr></thead>
+              <tbody id="sku-table-body"><tr><td colspan="14" class="empty-cell">Loading product data…</td></tr></tbody>
             </table>
           </div>
-          <div class="table-footer"><span id="table-footnote">SKU values are distinct product identifiers, not units sold.</span><span id="table-pagination">—</span></div>
+          <div class="table-footer"><span id="table-footnote">Sales metrics are sourced directly from ShopifyQL. SKU count is distinct variant codes, not units.</span><span class="pagination-controls"><button class="button button-secondary" id="table-prev" type="button" disabled>Previous</button><span id="table-pagination">—</span><button class="button button-secondary" id="table-next" type="button" disabled>Next</button></span></div>
         </div>
       </section>
 
@@ -158,13 +189,13 @@
         </div>
         <div class="margin-grid">
           <article class="panel margin-card">
-            <div class="margin-card-heading"><span class="margin-icon">＋</span><div><strong>Including Dropshipping</strong><small>All classified products</small></div></div>
+            <div class="margin-card-heading"><span class="margin-icon">＋</span><div><strong>Including Dropshipping <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></strong><small>All classified products</small></div></div>
             <div class="margin-number" id="margin-with">—</div>
             <div class="margin-progress"><span id="margin-with-bar"></span></div>
             <div class="margin-metrics"><div><span>Gross profit</span><strong id="profit-with">—</strong></div><div><span>Net sales with known cost</span><strong id="sales-with">—</strong></div></div>
           </article>
           <article class="panel margin-card">
-            <div class="margin-card-heading"><span class="margin-icon margin-icon-light">−</span><div><strong>Excluding Dropshipping</strong><small>Stocked products only</small></div></div>
+            <div class="margin-card-heading"><span class="margin-icon margin-icon-light">−</span><div><strong>Excluding Dropshipping <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></strong><small>Stocked products only</small></div></div>
             <div class="margin-number" id="margin-without">—</div>
             <div class="margin-progress"><span id="margin-without-bar"></span></div>
             <div class="margin-metrics"><div><span>Gross profit</span><strong id="profit-without">—</strong></div><div><span>Net sales with known cost</span><strong id="sales-without">—</strong></div></div>
@@ -183,19 +214,19 @@
 
       <section class="section-block" id="monthly-history">
         <div class="section-heading-row section-heading-compact">
-          <div><div class="eyebrow">PERIOD-OVER-PERIOD TRACKING</div><h2>Monthly History</h2><p class="section-subtitle">Track SKU counts and Pareto concentration as monthly snapshots accumulate.</p></div>
+          <div><div class="eyebrow">PERIOD-OVER-PERIOD TRACKING</div><h2>Monthly History</h2><p class="section-subtitle">Track SKU counts, net items sold and sales concentration as monthly snapshots accumulate.</p></div>
           <span class="panel-chip">LAST 36 SNAPSHOTS</span>
         </div>
         <div class="history-grid">
           <article class="panel history-panel"><div class="panel-header"><div><h3>Unique SKU Trend</h3><p>Monthly snapshot comparison.</p></div><span class="chart-unit">SKU COUNT</span></div><div class="chart-wrap history-chart-wrap"><svg id="history-chart" viewBox="0 0 900 250" role="img" aria-label="Monthly unique SKU history"></svg></div><div class="history-legend"><span><i class="history-line-dark"></i> 2026 YTD</span><span><i class="history-line-light"></i> FY 2025</span></div></article>
-          <article class="panel history-summary"><div class="eyebrow">LATEST SNAPSHOT</div><h3 id="history-month">No snapshots yet</h3><div class="history-stat"><span>Latest month unique SKUs</span><strong id="history-ytd-count">—</strong></div><div class="history-stat"><span>Latest month SKUs generating 80%</span><strong id="history-ytd-pareto">—</strong></div><div class="history-stat"><span>Latest month net product sales</span><strong id="history-fy-count">—</strong></div><p class="history-hint" id="history-hint">A snapshot is saved automatically when the monthly GitHub Action runs.</p></article>
+          <article class="panel history-summary"><div class="eyebrow">LATEST SNAPSHOT</div><h3 id="history-month">No snapshots yet</h3><div class="history-stat"><span>Latest month unique SKUs</span><strong id="history-ytd-count">—</strong></div><div class="history-stat"><span>Latest month concentration index (Gini)</span><strong id="history-ytd-pareto">—</strong></div><div class="history-stat"><span>Latest month net product sales</span><strong id="history-fy-count">—</strong></div><p class="history-hint" id="history-hint">A snapshot is saved automatically when the monthly GitHub Action runs.</p></article>
         </div>
       </section>
 
       <section class="section-block" id="data-sources">
         <div class="section-heading-row section-heading-compact"><div><div class="eyebrow">CONNECTION STATUS</div><h2>Data Sources</h2><p class="section-subtitle">Review connected systems and data readiness.</p></div></div>
         <div class="source-grid">
-          <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">S</div><span class="source-state" id="equestrian-state">Checking</span></div><h3>Corro</h3><p>Shopify orders, product SKU, inventory availability and unit costs.</p><div class="source-detail"><span>Store</span><strong id="equestrian-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="equestrian-connection">Awaiting credentials</strong></div></article>
+          <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">S</div><span class="source-state" id="equestrian-state">Checking</span></div><h3>Corro</h3><p>ShopifyQL sales metrics, SKU metadata and current unit costs. Inventory availability is not yet synchronized.</p><div class="source-detail"><span>Store</span><strong id="equestrian-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="equestrian-connection">Awaiting credentials</strong></div></article>
           <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">C</div><span class="source-state source-state-pending" id="cavali-state">Checking</span></div><h3>Cavali</h3><p>Second Shopify store, processed independently with its own monthly history and Pareto analysis.</p><div class="source-detail"><span>Store</span><strong id="cavali-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="cavali-connection">Awaiting credentials</strong></div></article>
           <article class="panel source-card methodology-card"><div class="source-card-top"><div class="source-logo method-logo">ƒ</div><span class="source-state source-state-neutral">Methodology</span></div><h3>Calculation Rules</h3><ul><li>Unique SKU values, counted once per period.</li><li>Pareto based on net product sales.</li><li>Refunds are assigned to their refund date.</li><li>Gross margin uses available unit-cost data.</li><li>Dropshipping uses configured tags or line properties.</li></ul></article>
         </div>
@@ -205,5 +236,10 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-dialog-title">
+    <div class="help-dialog-header"><div><div class="eyebrow">METRIC GUIDE</div><h2 id="help-dialog-title">How to read this metric</h2></div><button class="icon-button" id="help-dialog-close" type="button" aria-label="Close explanation">×</button></div>
+    <div class="help-dialog-body" id="help-dialog-body"></div>
+    <div class="help-dialog-footer"><button class="button button-primary" id="help-dialog-done" type="button">Got it</button></div>
+  </dialog>
 </body>
 </html>

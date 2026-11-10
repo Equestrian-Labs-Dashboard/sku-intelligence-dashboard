@@ -26,6 +26,8 @@ const BULK_QUERY = (search) => `
               title
               quantity
               currentQuantity
+              originalTotalSet { shopMoney { amount currencyCode } }
+              totalDiscountSet { shopMoney { amount currencyCode } }
               discountedTotalSet { shopMoney { amount currencyCode } }
               discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount currencyCode } }
               priceAfterAllDiscountsBeforeTaxesSet { shopMoney { amount currencyCode } }
@@ -40,10 +42,6 @@ const BULK_QUERY = (search) => `
               }
             }
           }
-        }
-        refunds {
-          id
-          createdAt
         }
       }
     }
@@ -73,38 +71,6 @@ async function graphql(config, query, variables = {}) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function fetchRefundDetails(config, order) {
-  if (!order.refunds?.length) return;
-  const data = await graphql(config, `
-    query OrderRefundDetails($id: ID!) {
-      order(id: $id) {
-        refunds {
-          id
-          createdAt
-          refundLineItems(first: 250) {
-            pageInfo { hasNextPage }
-            nodes {
-              quantity
-              subtotalSet { shopMoney { amount currencyCode } }
-              lineItem { id sku title }
-            }
-          }
-          transactions(first: 20) { nodes { kind status } }
-        }
-      }
-    }
-  `, { id: order.id });
-  const details = new Map((data?.order?.refunds || []).map((refund) => [refund.id, refund]));
-  order.refunds = order.refunds.map((refund) => {
-    const detail = details.get(refund.id);
-    if (!detail) return refund;
-    if (detail.refundLineItems?.pageInfo?.hasNextPage) {
-      throw new Error(`Order ${order.name || order.id} contains a refund with more than 250 lines. A paginated refund export is required.`);
-    }
-    return detail;
-  });
-}
 
 async function runBulkQuery(config, search) {
   const query = BULK_QUERY(search);
@@ -165,16 +131,11 @@ function reconstructOrders(records) {
     delete clean.__parentId;
     if (clean.__typename === 'Order') {
       clean.lineItems = { nodes: [] };
-      clean.refunds = [];
       objects.set(clean.id, clean);
       roots.push(clean);
     } else if (clean.__typename === 'LineItem') {
       const parent = objects.get(record.__parentId);
       if (parent) parent.lineItems.nodes.push(clean);
-      objects.set(clean.id, clean);
-    } else if (clean.__typename === 'Refund') {
-      const parent = objects.get(record.__parentId);
-      if (parent) parent.refunds.push(clean);
       objects.set(clean.id, clean);
     }
   }
@@ -196,10 +157,5 @@ export async function fetchShopifyOrdersForPeriod(config, period) {
   const updatedOrders = await fetchOrdersBySearch(config, updatedSearch);
   const combined = new Map();
   for (const order of [...createdOrders, ...updatedOrders]) combined.set(order.id, order);
-  const result = [...combined.values()];
-  // Fetch nested refund connections separately only for orders that have refunds.
-  for (const order of result) {
-    if (order.refunds?.length) await fetchRefundDetails(config, order);
-  }
-  return result;
+  return [...combined.values()];
 }

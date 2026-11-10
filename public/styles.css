@@ -346,3 +346,127 @@ tbody tr:hover { background: var(--surface-soft); }
 .comparison-insight p { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.4; }
 @media (max-width: 1200px) { .comparison-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .comparison-heading { flex-direction: column; } .comparison-metrics { grid-template-columns: 1fr 1fr; gap: 13px; } .comparison-insight { grid-column: span 2; } }
+
+
+/* Metric explanations and methodology dialog */
+.help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid var(--border-strong, #cbd0d8);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted, #78808c);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.help-button:hover, .help-button:focus-visible {
+  background: var(--surface-muted);
+  color: var(--text);
+  outline: 2px solid var(--border-strong, #cbd0d8);
+  outline-offset: 2px;
+}
+.report-method-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 12px 15px;
+  border: 1px solid var(--border, #e5e8ed);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--text);
+}
+.report-method-banner .method-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  font-weight: 700;
+}
+.report-method-banner div { display: grid; gap: 3px; flex: 1; }
+.report-method-banner strong { font-size: 12px; }
+.report-method-banner span { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.help-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(78vh, 720px);
+  padding: 0;
+  border: 1px solid var(--border, #e5e8ed);
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  color: var(--text, #15171a);
+  box-shadow: 0 24px 80px rgba(0,0,0,.22);
+}
+.help-dialog::backdrop { background: rgba(15, 18, 24, .48); backdrop-filter: blur(3px); }
+.help-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--border, #e5e8ed);
+}
+.help-dialog-header h2 { margin: 5px 0 0; font-size: 20px; }
+.help-dialog-body { padding: 18px 24px 22px; overflow-y: auto; font-size: 13px; line-height: 1.65; }
+.help-dialog-body p { margin: 0 0 12px; }
+.help-dialog-body p:last-child { margin-bottom: 0; }
+.help-dialog-body code { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); }
+.help-dialog-footer { display: flex; justify-content: flex-end; padding: 0 24px 20px; }
+.pagination-controls { display: inline-flex; align-items: center; gap: 10px; }
+.pagination-controls .button { min-height: 30px; padding: 5px 10px; font-size: 11px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { min-width: 1450px; }
+.table-scroll th { white-space: nowrap; }
+.action-pill.core { background: #eef3f0; color: #28664a; }
+.action-pill.drop { background: #f0edfa; color: #6346a2; }
+@media (max-width: 760px) {
+  .report-method-banner { align-items: flex-start; flex-wrap: wrap; }
+  .report-method-banner .button { margin-left: 36px; }
+  .help-dialog-header, .help-dialog-body { padding-left: 18px; padding-right: 18px; }
+}
+
+.sales-bridge-panel { margin: 18px 0 20px; padding: 18px; }
+.sales-bridge-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(100px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.sales-bridge-grid > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+.sales-bridge-grid span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.sales-bridge-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1100px) {
+  .sales-bridge-grid { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .sales-bridge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

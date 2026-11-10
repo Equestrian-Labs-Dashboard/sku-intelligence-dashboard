@@ -1,14 +1,8 @@
 import { isDateInPeriod } from './periods.mjs';
 
-function amount(moneyBag) {
-  const value = moneyBag?.shopMoney?.amount ?? moneyBag?.amount;
-  if (value === undefined || value === null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function moneyCurrency(moneyBag) {
-  return moneyBag?.shopMoney?.currencyCode ?? moneyBag?.currencyCode ?? null;
+function round(value, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 function getSku(line) {
@@ -23,86 +17,44 @@ function getUnitCost(line) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function availableInventory(line) {
-  const levels = line?.variant?.inventoryItem?.inventoryLevels?.nodes || [];
-  return levels.reduce((total, level) => {
-    const available = (level?.quantities || []).find((item) => item.name === 'available');
-    return total + (Number(available?.quantity) || 0);
-  }, 0);
-}
-
 function isDropshipLine(order, line, configuredTags) {
   const tags = [
     ...(Array.isArray(order?.tags) ? order.tags : []),
     ...(Array.isArray(line?.product?.tags) ? line.product.tags : [])
   ].map((tag) => String(tag).trim().toLowerCase());
-
   if (tags.some((tag) => configuredTags.includes(tag))) return true;
-
-  const attributes = line?.customAttributes || [];
-  return attributes.some((attribute) => {
+  return (line?.customAttributes || []).some((attribute) => {
     const text = `${attribute?.key || ''} ${attribute?.value || ''}`.toLowerCase();
     return /dropship|drop.?ship|supplier.?fulfil|supplier.?fulfill/.test(text);
   });
 }
 
-function addMovement(map, order, line, signedQuantity, signedRevenue, configuredTags, currency) {
-  const sku = getSku(line);
-  if (!sku) return false;
-
-  let row = map.get(sku);
-  if (!row) {
-    row = {
-      sku,
-      productTitle: line?.product?.title || line?.title || 'Untitled product',
-      category: line?.product?.productType || 'Uncategorized',
-      vendor: line?.product?.vendor || '—',
-      unitsSold: 0,
-      netSales: 0,
-      costOfGoodsSold: 0,
-      costKnownSales: 0,
-      costMissingUnits: 0,
-      isDropship: false,
-      inventoryAvailable: 0,
-      inventoryItemIds: new Set(),
-      currency: currency || moneyCurrency(line?.discountedTotalSet) || 'USD'
-    };
-    map.set(sku, row);
+function metadataBySku(orders, configuredTags) {
+  const map = new Map();
+  for (const order of orders || []) {
+    for (const line of order?.lineItems?.nodes || []) {
+      const sku = getSku(line);
+      if (!sku) continue;
+      const previous = map.get(sku) || {};
+      const unitCost = getUnitCost(line);
+      map.set(sku, {
+        productTitle: line?.product?.title || line?.title || previous.productTitle || sku,
+        category: line?.product?.productType || previous.category || 'Uncategorized',
+        vendor: line?.product?.vendor || previous.vendor || '—',
+        unitCost: unitCost ?? previous.unitCost ?? null,
+        isDropship: Boolean(previous.isDropship || isDropshipLine(order, line, configuredTags))
+      });
+    }
   }
-
-  row.unitsSold += signedQuantity;
-  row.netSales += signedRevenue;
-  row.isDropship ||= isDropshipLine(order, line, configuredTags);
-
-  const unitCost = getUnitCost(line);
-  if (unitCost !== null) {
-    row.costOfGoodsSold += unitCost * signedQuantity;
-    row.costKnownSales += signedRevenue;
-  } else {
-    row.costMissingUnits += signedQuantity;
-  }
-
-  const inventoryItemId = line?.variant?.inventoryItem?.id;
-  if (inventoryItemId && !row.inventoryItemIds.has(inventoryItemId)) {
-    row.inventoryItemIds.add(inventoryItemId);
-    row.inventoryAvailable += availableInventory(line);
-  }
-
-  return true;
-}
-
-function round(value, digits = 2) {
-  const factor = 10 ** digits;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+  return map;
 }
 
 function marginForRows(rows) {
-  const netSalesWithKnownCost = rows.reduce((sum, row) => sum + row.costKnownSales, 0);
-  const costOfGoodsSold = rows.reduce((sum, row) => sum + row.costOfGoodsSold, 0);
+  const netSalesWithKnownCost = rows.reduce((sum, row) => sum + (row.costKnownSales || 0), 0);
+  const costOfGoodsSold = rows.reduce((sum, row) => sum + (row.costOfGoodsSold || 0), 0);
   const grossProfit = netSalesWithKnownCost - costOfGoodsSold;
   const totalNetSales = rows.reduce((sum, row) => sum + row.netSales, 0);
   const coverage = totalNetSales > 0 ? (netSalesWithKnownCost / totalNetSales) * 100 : 0;
-
   return {
     netSales: round(totalNetSales),
     netSalesWithKnownCost: round(netSalesWithKnownCost),
@@ -113,183 +65,175 @@ function marginForRows(rows) {
   };
 }
 
-export function buildPeriodReport(orders, period, options = {}) {
+function giniCoefficient(rows) {
+  const values = rows.map((row) => Math.max(0, row.netSales)).filter((value) => value > 0).sort((a, b) => a - b);
+  const n = values.length;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!n || total <= 0) return 0;
+  const weighted = values.reduce((sum, value, index) => sum + (index + 1) * value, 0);
+  return round(((2 * weighted) / (n * total) - (n + 1) / n) * 100, 2);
+}
+
+function aggregateShopifyRows(salesRows) {
+  const map = new Map();
+  for (const source of salesRows || []) {
+    const sku = String(source.sku || source.product_variant_sku || '').trim();
+    if (!sku) continue;
+    let row = map.get(sku);
+    if (!row) {
+      row = {
+        sku,
+        productTitle: source.productTitle || source.product_title || sku,
+        grossSales: 0,
+        discounts: 0,
+        salesReversals: 0,
+        netSales: 0,
+        quantityOrdered: 0,
+        netItemsSold: 0,
+        reversedQuantity: 0
+      };
+      map.set(sku, row);
+    }
+    // ShopifyQL can return separate rows when a variant's product title changed.
+    // Aggregate those rows to one unique SKU without losing any sales metrics.
+    row.grossSales += Number(source.grossSales ?? source.gross_sales) || 0;
+    row.discounts += Number(source.discounts) || 0;
+    row.salesReversals += Number(source.salesReversals ?? source.sales_reversals) || 0;
+    row.netSales += Number(source.netSales ?? source.net_sales) || 0;
+    row.quantityOrdered += Number(source.quantityOrdered ?? source.quantity_ordered) || 0;
+    row.netItemsSold += Number(source.netItemsSold ?? source.net_items_sold) || 0;
+    row.reversedQuantity += Number(source.reversedQuantity ?? source.reversed_quantity) || 0;
+    if ((Number(source.netSales ?? source.net_sales) || 0) > (Number(row._bestTitleSales) || -Infinity)) {
+      row.productTitle = source.productTitle || source.product_title || row.productTitle;
+      row._bestTitleSales = Number(source.netSales ?? source.net_sales) || 0;
+    }
+  }
+  return [...map.values()].map(({ _bestTitleSales, ...row }) => row);
+}
+
+export function buildPeriodReport(salesRows, metadataOrders, period, options = {}) {
   const configuredTags = options.dropshipTags || ['dropship', 'dropshipping'];
-  const skuMap = new Map();
-  const ordersWithSales = new Set();
-  let missingSkuLines = 0;
+  const metadata = metadataBySku(metadataOrders, configuredTags);
+  const currency = options.currencyCode || 'USD';
+  const aggregated = aggregateShopifyRows(salesRows);
 
-  for (const order of orders || []) {
-    if (order?.cancelledAt) continue;
-
-    const lineItems = order?.lineItems?.nodes || [];
-    const lineById = new Map(lineItems.map((line) => [line.id, line]));
-    const createdInPeriod = isDateInPeriod(order.createdAt, period);
-
-    if (createdInPeriod) {
-      for (const line of lineItems) {
-        const originalQuantity = Number(line.quantity) || 0;
-        const currentQuantity = Number(line.currentQuantity ?? line.quantity) || 0;
-        if (currentQuantity <= 0) continue;
-
-        const discountedTotal = amount(line.discountedTotalSet);
-        const discountedUnit = amount(line.priceAfterAllDiscountsBeforeTaxesSet) ?? amount(line.discountedUnitPriceAfterAllDiscountsSet);
-        const scaledTotal = discountedUnit !== null
-          ? discountedUnit * currentQuantity
-          : discountedTotal !== null && originalQuantity > 0
-            ? discountedTotal * (currentQuantity / originalQuantity)
-            : 0;
-        const revenue = discountedTotal === null && discountedUnit === null ? 0 : scaledTotal;
-        const added = addMovement(skuMap, order, line, currentQuantity, revenue, configuredTags, moneyCurrency(line.discountedTotalSet));
-        if (!added) missingSkuLines += 1;
-        else if (revenue > 0) ordersWithSales.add(order.id);
-      }
-    }
-
-    for (const refund of order?.refunds || []) {
-      if (!isDateInPeriod(refund.createdAt, period)) continue;
-      const refundTransactions = refund?.transactions?.nodes || [];
-      if (refundTransactions.length && !refundTransactions.some((transaction) => transaction.status === 'SUCCESS')) continue;
-      const refundLines = refund?.refundLineItems?.nodes || [];
-      for (const refundLine of refundLines) {
-        const originalLine = lineById.get(refundLine?.lineItem?.id);
-        const line = originalLine || {
-          sku: refundLine?.lineItem?.sku,
-          title: refundLine?.lineItem?.title,
-          variant: refundLine?.lineItem?.variant
-        };
-        const quantity = Number(refundLine.quantity) || 0;
-        if (!quantity) continue;
-
-        const unitPrice = amount(originalLine?.discountedUnitPriceAfterAllDiscountsSet);
-        const totalPrice = amount(originalLine?.discountedTotalSet);
-        const originalQty = Number(originalLine?.quantity) || 0;
-        const fallbackUnitPrice = unitPrice ?? (totalPrice !== null && originalQty > 0 ? totalPrice / originalQty : 0);
-        const refundSubtotal = amount(refundLine.subtotalSet);
-        const refundRevenue = refundSubtotal ?? (fallbackUnitPrice * quantity);
-        const added = addMovement(skuMap, order, line, -quantity, -refundRevenue, configuredTags, moneyCurrency(refundLine.subtotalSet) || moneyCurrency(originalLine?.discountedTotalSet));
-        if (!added) missingSkuLines += 1;
-      }
-    }
-  }
-
-  const allRows = [...skuMap.values()].map((row) => {
-    const { inventoryItemIds, ...clean } = row;
-    const grossProfit = clean.costKnownSales - clean.costOfGoodsSold;
+  const allRows = aggregated.map((sales) => {
+    const meta = metadata.get(sales.sku) || {};
+    const unitCost = meta.unitCost ?? null;
+    const costOfGoodsSold = unitCost === null ? 0 : unitCost * sales.netItemsSold;
+    const costKnownSales = unitCost === null ? 0 : sales.netSales;
+    const grossProfit = costKnownSales - costOfGoodsSold;
     return {
-      ...clean,
-      netSales: round(clean.netSales),
-      costOfGoodsSold: round(clean.costOfGoodsSold),
+      ...sales,
+      productTitle: meta.productTitle || sales.productTitle || sales.sku,
+      category: meta.category || 'Uncategorized',
+      vendor: meta.vendor || '—',
+      unitsSold: sales.netItemsSold,
+      costOfGoodsSold: round(costOfGoodsSold),
+      costKnownSales,
+      costMissingUnits: unitCost === null ? sales.netItemsSold : 0,
       grossProfit: round(grossProfit),
-      grossMargin: clean.costKnownSales > 0 ? round((grossProfit / clean.costKnownSales) * 100) : null,
-      inventoryAvailable: Math.max(0, clean.inventoryAvailable)
+      grossMargin: costKnownSales > 0 ? round((grossProfit / costKnownSales) * 100) : null,
+      isDropship: Boolean(meta.isDropship),
+      inventoryAvailable: null,
+      currency
     };
-  });
+  }).filter((row) => row.quantityOrdered !== 0 || row.netItemsSold !== 0 || row.netSales !== 0 || row.salesReversals !== 0);
 
-  const soldRows = allRows
-    .filter((row) => row.unitsSold > 0 && row.netSales > 0)
-    .sort((a, b) => b.netSales - a.netSales || a.sku.localeCompare(b.sku));
-  const paretoSales = soldRows.reduce((sum, row) => sum + row.netSales, 0);
+  const rankedRows = allRows
+    .sort((a, b) => b.netSales - a.netSales || b.netItemsSold - a.netItemsSold || a.sku.localeCompare(b.sku));
+  const totalNetSales = rankedRows.reduce((sum, row) => sum + row.netSales, 0);
   let cumulativeSales = 0;
-  let top80SkuCount = 0;
-  const rankedRows = soldRows.map((row, index) => {
-    const share = paretoSales > 0 ? row.netSales / paretoSales : 0;
+  rankedRows.forEach((row, index) => {
     cumulativeSales += row.netSales;
-    const cumulativeShare = paretoSales > 0 ? cumulativeSales / paretoSales : 0;
-    if (top80SkuCount === 0 && cumulativeShare >= 0.8) top80SkuCount = index + 1;
-    return {
-      ...row,
-      rank: index + 1,
-      salesShare: round(share * 100),
-      cumulativeShare: round(cumulativeShare * 100),
-      isTop80: false,
-      action: row.isDropship ? 'DROPSHIP' : 'LOW PRIORITY'
-    };
+    row.rank = index + 1;
+    row.salesShare = totalNetSales !== 0 ? round((row.netSales / totalNetSales) * 100) : 0;
+    row.cumulativeShare = totalNetSales !== 0 ? round((cumulativeSales / totalNetSales) * 100) : 0;
+    row.action = row.isDropship ? 'DROPSHIP' : 'STOCK REVIEW';
   });
 
-  if (rankedRows.length && top80SkuCount === 0) top80SkuCount = rankedRows.length;
-  for (const row of rankedRows) {
-    row.isTop80 = row.rank <= top80SkuCount;
-    if (!row.isDropship) row.action = row.isTop80 ? 'CORE STOCK' : 'LOW PRIORITY';
-  }
-
-  const rankedSkuSet = new Set(rankedRows.map((row) => row.sku));
-  const nonParetoRows = allRows
-    .filter((row) => !rankedSkuSet.has(row.sku))
-    .map((row) => ({
-      ...row,
-      rank: null,
-      salesShare: 0,
-      cumulativeShare: 0,
-      isTop80: false,
-      action: row.isDropship ? 'DROPSHIP' : 'REVIEW RETURNS'
-    }));
-
-  const totalNetSales = allRows.reduce((sum, row) => sum + row.netSales, 0);
-  const totalUnits = allRows.reduce((sum, row) => sum + row.unitsSold, 0);
-  const withDropshipping = marginForRows(allRows);
-  const withoutDropshipping = marginForRows(allRows.filter((row) => !row.isDropship));
+  const soldRows = rankedRows.filter((row) => row.quantityOrdered > 0 || row.netItemsSold > 0);
+  const withDropshipping = marginForRows(rankedRows);
+  const withoutDropshipping = marginForRows(rankedRows.filter((row) => !row.isDropship));
   const marginImpactPp = withDropshipping.grossMargin !== null && withoutDropshipping.grossMargin !== null
     ? round(withDropshipping.grossMargin - withoutDropshipping.grossMargin)
     : null;
+
+  const positiveSalesRows = rankedRows.filter((row) => row.netSales > 0);
+  const topSku = positiveSalesRows[0] || null;
+  const concentrationGini = giniCoefficient(rankedRows);
 
   return {
     period,
     summary: {
       totalUniqueSkus: soldRows.length,
-      top80SkuCount,
-      remainingSkuCount: Math.max(0, soldRows.length - top80SkuCount),
-      totalUnitsSold: round(totalUnits, 0),
+      totalUnitsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0), 0),
+      quantityOrdered: round(rankedRows.reduce((sum, row) => sum + row.quantityOrdered, 0), 0),
+      netItemsSold: round(rankedRows.reduce((sum, row) => sum + row.netItemsSold, 0), 0),
+      reversedQuantity: round(rankedRows.reduce((sum, row) => sum + row.reversedQuantity, 0), 0),
+      grossSales: round(rankedRows.reduce((sum, row) => sum + row.grossSales, 0)),
+      discounts: round(rankedRows.reduce((sum, row) => sum + row.discounts, 0)),
+      salesReversals: round(rankedRows.reduce((sum, row) => sum + row.salesReversals, 0)),
       netSales: round(totalNetSales),
-      paretoSales: round(paretoSales),
-      ordersCount: ordersWithSales.size,
-      missingSkuLines,
+      topSkuShare: topSku ? topSku.salesShare : 0,
+      concentrationGini,
+      ordersCount: null,
+      missingSkuLines: 0,
       dropshipSkuCount: soldRows.filter((row) => row.isDropship).length,
-      currency: soldRows[0]?.currency || allRows[0]?.currency || 'USD'
+      currency
     },
     grossMargin: {
       withDropshipping,
       withoutDropshipping,
       dropshippingImpactPp: marginImpactPp
     },
-    skuRows: [...rankedRows, ...nonParetoRows].map((row) => ({
-      ...row,
-      unitsSold: round(row.unitsSold, 0)
-    })),
+    skuRows: rankedRows,
     dataQuality: {
-      missingSkuLines,
-      refundsIncluded: false,
-      refundCoverage: 'Refund line items are not included in this Shopify Bulk export. Treat net sales and Pareto as pre-refund until refund ingestion is added.',
-      costBasis: 'Current Shopify unit cost; historical unit costs are not reconstructed.',
-      paretoBasis: 'Net product sales after discounts and successfully processed refunds, excluding taxes and shipping.'
+      salesSource: 'ShopifyQL FROM sales grouped by product_variant_sku and product_title.',
+      salesBasis: 'Gross sales, discounts, sales reversals, net sales and quantities are taken directly from ShopifyQL. They are not reconstructed from order line totals.',
+      quantityBasis: 'Quantity ordered is the original quantity. Net items sold is after reversals. Reversed quantity is the quantity removed through refunds, returns, cancellations or order edits; Shopify may report it as a negative value.',
+      skuCountBasis: 'Unique SKU count is the number of distinct non-empty product_variant_sku values with ordered or net item activity. It is not a unit count or order count.',
+      periodBasis: 'Sales metrics follow Shopify sales-event reporting for the selected date range. Adjustments can be attributed to the date they occur, which may differ from filtering orders only by their creation date.',
+      productGrouping: 'The report counts variant SKUs. A product-level Shopify report can combine multiple variants, so product totals and SKU totals are not always directly comparable.',
+      costBasis: 'Gross margin uses the current Shopify unit cost where available, multiplied by net items sold. Historical unit costs are not reconstructed.',
+      inventoryBasis: 'Available inventory is not currently synchronized; it is shown as unavailable rather than zero.',
+      concentrationBasis: 'The full SKU catalog is ranked by actual net sales. No fixed 80/20 distribution is assumed.'
     }
   };
 }
 
-export function buildReport(ordersByPeriod, periods, options = {}) {
-  const fy2025 = buildPeriodReport(ordersByPeriod.FY2025 || [], periods.FY2025, options);
-  const ytd2026 = buildPeriodReport(ordersByPeriod.YTD2026 || [], periods.YTD2026, options);
-  const month = buildPeriodReport(ordersByPeriod.MONTH || [], periods.MONTH, options);
-
+export function buildReport(salesByPeriod, metadataOrdersByPeriod, periods, options = {}) {
+  const metadataOrders = [...(metadataOrdersByPeriod.FY2025 || []), ...(metadataOrdersByPeriod.YTD2026 || [])];
+  const metadata = metadataOrders;
+  const build = (key) => buildPeriodReport(
+    salesByPeriod[key] || [],
+    metadata,
+    periods[key],
+    options
+  );
   return {
     generatedAt: new Date().toISOString(),
     source: {
-      primary: 'Shopify Admin GraphQL API',
+      primary: 'ShopifyQL sales analytics',
+      metadata: 'Shopify Admin GraphQL Bulk Operations',
       demo: false,
       shopifyConnected: true,
       ponevaStatus: 'PENDING_API_CONTRACT'
     },
     reportingTimezone: options.timezone || 'America/La_Paz',
     periods: {
-      FY2025: fy2025,
-      YTD2026: ytd2026,
-      MONTH: month
+      FY2025: build('FY2025'),
+      YTD2026: build('YTD2026'),
+      MONTH: build('MONTH')
     },
     notes: [
-      'Unique SKU counts are based on distinct non-empty SKU values with positive net units and net sales.',
-      'Pareto ranking uses net product sales after discounts and successfully processed refunds; taxes and shipping are excluded.',
-      'Gross margin uses the current Shopify unit cost available at report time, not historical cost at the time of sale.',
-      'Dropshipping classification depends on configured tags or matching line-item properties.'
+      'All sales metrics are sourced directly from ShopifyQL FROM sales, grouped by product variant SKU.',
+      'Distinct SKU counts are not unit counts or order counts.',
+      'Sales reversals include refunds, returns, cancellations and order edits.',
+      'A product-level report may combine multiple variant SKUs.',
+      'No fixed 80/20 rule is assumed; the full SKU concentration curve is calculated from actual net sales.',
+      'Gross margin uses current unit cost where available, not historical unit costs.',
+      'Inventory availability is not currently synchronized.'
     ]
   };
 }

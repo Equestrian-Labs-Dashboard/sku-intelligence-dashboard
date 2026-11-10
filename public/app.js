@@ -7,7 +7,8 @@ const state = {
   periodKey: 'MONTH',
   storeKey: 'equestrian',
   monthKey: '',
-  visibleRows: []
+  visibleRows: [],
+  tablePage: 0
 };
 
 function escapeHtml(value) {
@@ -51,101 +52,115 @@ function showToast(message) {
 }
 
 function renderKpis(periodReport) {
-  const summary = periodReport.summary;
-  const margin = periodReport.grossMargin?.withDropshipping;
+  const summary = periodReport.summary || {};
+  const margin = periodReport.grossMargin?.withDropshipping || {};
   const currencyCode = summary.currency || 'USD';
   $('#period-title').textContent = periodReport.period?.label || 'Selected period';
   $('#kpi-unique').textContent = number(summary.totalUniqueSkus);
-  $('#kpi-top80').textContent = number(summary.top80SkuCount);
+  $('#kpi-net-items').textContent = number(summary.netItemsSold ?? summary.totalUnitsSold);
   $('#kpi-sales').textContent = currency(summary.netSales, currencyCode);
-  $('#kpi-margin').textContent = percentage(margin?.grossMargin);
-  $('#kpi-unique-change').textContent = `${number(summary.totalUnitsSold)} units sold`;
-  $('#kpi-top80-share').textContent = `${number(summary.remainingSkuCount)} remaining`;
-  $('#kpi-margin-coverage').textContent = `Cost coverage ${percentage(margin?.costCoveragePct, 0)}`;
-  $('#pareto-count').textContent = number(summary.top80SkuCount);
-  $('#pareto-rest').textContent = number(summary.remainingSkuCount);
-  $('#donut-total').textContent = number(summary.totalUniqueSkus);
-  $('#donut-top-count').textContent = number(summary.top80SkuCount);
-  $('#donut-rest-count').textContent = number(summary.remainingSkuCount);
-  const concentration = summary.totalUniqueSkus > 0 ? summary.top80SkuCount / summary.totalUniqueSkus * 100 : 0;
-  $('#concentration-insight').textContent = `${number(concentration, 1)}% of SKUs generate 80% of sales`;
-  const topRatio = summary.totalUniqueSkus > 0 ? summary.top80SkuCount / summary.totalUniqueSkus * 100 : 0;
-  $('#donut-chart').style.background = `conic-gradient(var(--black) 0 ${topRatio}%, var(--surface-muted) ${topRatio}% 100%)`;
+  $('#kpi-margin').textContent = percentage(margin.grossMargin);
+  $('#kpi-unique-change').textContent = `${number(summary.quantityOrdered)} quantity ordered`;
+  $('#kpi-quantity-bridge').textContent = `Reversed ${number(summary.reversedQuantity)}`;
+  $('#kpi-margin-coverage').textContent = `Cost coverage ${percentage(margin.costCoveragePct, 0)}`;
+  $('#bridge-gross').textContent = currency(summary.grossSales, currencyCode);
+  $('#bridge-discounts').textContent = currency(summary.discounts, currencyCode);
+  $('#bridge-reversals').textContent = currency(summary.salesReversals, currencyCode);
+  $('#bridge-net').textContent = currency(summary.netSales, currencyCode);
+  $('#bridge-ordered').textContent = number(summary.quantityOrdered);
+  $('#bridge-net-items').textContent = number(summary.netItemsSold ?? summary.totalUnitsSold);
+  $('#bridge-reversed-qty').textContent = number(summary.reversedQuantity);
+  $('#pareto-count').textContent = number(summary.totalUniqueSkus);
+  $('#pareto-rest').textContent = percentage(summary.topSkuShare, 2);
+  $('#donut-total').textContent = currency(summary.netSales, currencyCode);
+  const rows = periodReport.skuRows || [];
+  const dropshipSales = rows.filter((row) => row.isDropship).reduce((sum, row) => sum + Math.max(0, row.netSales), 0);
+  const stockedSales = rows.filter((row) => !row.isDropship).reduce((sum, row) => sum + Math.max(0, row.netSales), 0);
+  const totalMix = dropshipSales + stockedSales;
+  const dropshipShare = totalMix > 0 ? dropshipSales / totalMix * 100 : 0;
+  $('#donut-top-count').textContent = `${currency(dropshipSales, currencyCode)} · ${percentage(dropshipShare, 1)}`;
+  $('#donut-rest-count').textContent = `${currency(stockedSales, currencyCode)} · ${percentage(100 - dropshipShare, 1)}`;
+  $('#concentration-insight').textContent = `${number(summary.totalUniqueSkus)} distinct SKUs contribute to ${currency(summary.netSales, currencyCode)} in net product sales.`;
+  $('#donut-chart').style.background = `conic-gradient(var(--black) 0 ${dropshipShare}%, var(--surface-muted) ${dropshipShare}% 100%)`;
 }
 
 function renderPeriodComparison() {
   const fy = state.report?.periods?.FY2025?.summary;
   const ytd = state.report?.periods?.YTD2026?.summary;
   if (!fy || !ytd) return;
-  const fyShare = fy.totalUniqueSkus > 0 ? fy.top80SkuCount / fy.totalUniqueSkus * 100 : 0;
-  const ytdShare = ytd.totalUniqueSkus > 0 ? ytd.top80SkuCount / ytd.totalUniqueSkus * 100 : 0;
-  const deltaLabel = (before, after, suffix = '') => {
-    const delta = Number(after || 0) - Number(before || 0);
-    return `${delta > 0 ? '+' : ''}${number(delta, 1)}${suffix}`;
+  const delta = (before, after, digits = 0) => {
+    const value = Number(after || 0) - Number(before || 0);
+    return `${value > 0 ? '+' : ''}${number(value, digits)}`;
   };
   $('#compare-unique-fy').textContent = number(fy.totalUniqueSkus);
   $('#compare-unique-ytd').textContent = number(ytd.totalUniqueSkus);
-  $('#compare-unique-delta').textContent = `${deltaLabel(fy.totalUniqueSkus, ytd.totalUniqueSkus)} SKUs vs. FY 2025`;
-  $('#compare-top-fy').textContent = number(fy.top80SkuCount);
-  $('#compare-top-ytd').textContent = number(ytd.top80SkuCount);
-  $('#compare-top-delta').textContent = `${deltaLabel(fy.top80SkuCount, ytd.top80SkuCount)} SKUs in the 80% group`;
-  $('#compare-share-fy').textContent = percentage(fyShare, 1);
-  $('#compare-share-ytd').textContent = percentage(ytdShare, 1);
-  $('#compare-share-delta').textContent = `${deltaLabel(fyShare, ytdShare, ' pp')} of total SKU base`;
-  if (ytdShare < fyShare) {
-    $('#compare-insight-title').textContent = 'Sales concentration is increasing';
-    $('#compare-insight-copy').textContent = `A smaller share of the SKU catalog now generates 80% of sales (${number(ytdShare, 1)}% vs. ${number(fyShare, 1)}% in FY 2025).`;
-  } else if (ytdShare > fyShare) {
-    $('#compare-insight-title').textContent = 'Sales concentration is decreasing';
-    $('#compare-insight-copy').textContent = `A larger share of the SKU catalog is now required to generate 80% of sales (${number(ytdShare, 1)}% vs. ${number(fyShare, 1)}% in FY 2025).`;
-  } else {
-    $('#compare-insight-title').textContent = 'Sales concentration is unchanged';
-    $('#compare-insight-copy').textContent = 'The share of the SKU catalog required to generate 80% of sales is the same in both periods.';
-  }
+  $('#compare-unique-delta').textContent = `${delta(fy.totalUniqueSkus, ytd.totalUniqueSkus)} SKUs; periods differ`;
+  $('#compare-units-fy').textContent = number(fy.netItemsSold ?? fy.totalUnitsSold);
+  $('#compare-units-ytd').textContent = number(ytd.netItemsSold ?? ytd.totalUnitsSold);
+  $('#compare-units-delta').textContent = `${delta(fy.netItemsSold ?? fy.totalUnitsSold, ytd.netItemsSold ?? ytd.totalUnitsSold)} net items`;
+  const currencyCode = fy.currency || ytd.currency || 'USD';
+  $('#compare-sales-fy').textContent = currency(fy.netSales, currencyCode);
+  $('#compare-sales-ytd').textContent = currency(ytd.netSales, currencyCode);
+  $('#compare-sales-delta').textContent = `${delta(fy.netSales, ytd.netSales, 2)} ${currencyCode}; periods differ`;
+  const fyGini = Number(fy.concentrationGini) || 0;
+  const ytdGini = Number(ytd.concentrationGini) || 0;
+  const difference = ytdGini - fyGini;
+  $('#compare-insight-title').textContent = difference > 0.5
+    ? 'SKU sales are more concentrated in 2026 YTD'
+    : difference < -0.5
+      ? 'SKU sales are less concentrated in 2026 YTD'
+      : 'SKU sales concentration is broadly similar';
+  $('#compare-insight-copy').textContent = `Gini concentration index: ${number(fyGini, 2)} in FY 2025 vs. ${number(ytdGini, 2)} in 2026 YTD. Higher values indicate sales are concentrated in fewer SKUs. FY 2025 and 2026 YTD cover different lengths of time.`;
 }
 
 function renderPareto(periodReport) {
   const svg = $('#pareto-chart');
-  const rows = (periodReport.skuRows || []).filter((row) => row.rank && row.netSales > 0).slice(0, 12);
+  const rows = (periodReport.skuRows || []).filter((row) => row.rank);
   const width = 900;
   const height = 280;
-  const margin = { top: 18, right: 48, bottom: 42, left: 48 };
+  const margin = { top: 18, right: 42, bottom: 42, left: 58 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
   if (!rows.length) {
     svg.innerHTML = `<text x="450" y="135" text-anchor="middle" fill="currentColor" opacity=".55" font-size="13">No SKU sales data available for this period.</text>`;
     return;
   }
-  const maxSales = Math.max(...rows.map((row) => row.netSales), 1);
+  const values = rows.map((row) => Number(row.netSales) || 0);
+  const maxSales = Math.max(...values, 1);
+  const minSales = Math.min(...values, 0);
+  const range = Math.max(1, maxSales - minSales);
+  const y = (value) => margin.top + ((maxSales - value) / range) * plotHeight;
+  const baseline = y(0);
   const slot = plotWidth / rows.length;
-  const barWidth = Math.min(38, slot * .58);
+  const barWidth = Math.max(.25, Math.min(3, slot * .72));
   const grid = [0, .25, .5, .75, 1].map((ratio) => {
-    const y = margin.top + plotHeight * (1 - ratio);
-    return `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="chart-grid-line"/><text x="${margin.left - 10}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${Math.round(ratio * maxSales / 1000)}k</text>`;
+    const value = maxSales - ratio * range;
+    const yy = margin.top + ratio * plotHeight;
+    return `<line x1="${margin.left}" y1="${yy}" x2="${width - margin.right}" y2="${yy}" class="chart-grid-line"/><text x="${margin.left - 9}" y="${yy + 3}" text-anchor="end" class="chart-axis-label">${number(value / 1000, 1)}k</text>`;
   }).join('');
   const bars = rows.map((row, index) => {
     const x = margin.left + index * slot + (slot - barWidth) / 2;
-    const barHeight = row.netSales / maxSales * plotHeight;
-    const y = margin.top + plotHeight - barHeight;
-    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" class="pareto-bar"><title>${escapeHtml(row.sku)} · ${currency(row.netSales, periodReport.summary.currency)}</title></rect><text x="${x + barWidth / 2}" y="${height - 18}" text-anchor="middle" class="chart-axis-label">${index + 1}</text>`;
+    const valueY = y(Number(row.netSales) || 0);
+    const rectY = Math.min(valueY, baseline);
+    const rectHeight = Math.max(.4, Math.abs(baseline - valueY));
+    return `<rect x="${x.toFixed(2)}" y="${rectY.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${rectHeight.toFixed(2)}" class="pareto-bar"><title>Rank ${index + 1} · ${escapeHtml(row.sku)} · ${currency(row.netSales, periodReport.summary.currency)}</title></rect>`;
   }).join('');
   const points = rows.map((row, index) => {
     const x = margin.left + index * slot + slot / 2;
-    const y = margin.top + plotHeight * (1 - Math.min(100, row.cumulativeShare) / 100);
-    return `${x},${y}`;
+    const share = Math.max(-100, Math.min(200, Number(row.cumulativeShare) || 0));
+    const pointY = margin.top + plotHeight * (1 - share / 100);
+    return `${x.toFixed(2)},${pointY.toFixed(2)}`;
   }).join(' ');
-  const dots = rows.map((row, index) => {
-    const x = margin.left + index * slot + slot / 2;
-    const y = margin.top + plotHeight * (1 - Math.min(100, row.cumulativeShare) / 100);
-    return `<circle cx="${x}" cy="${y}" r="3.3" class="pareto-point"><title>${number(row.cumulativeShare, 1)}% cumulative</title></circle>`;
+  const ticks = [0, .25, .5, .75, 1].map((ratio) => {
+    const rank = Math.max(1, Math.round(rows.length * ratio));
+    const x = margin.left + (rank - .5) * slot;
+    return `<text x="${x.toFixed(2)}" y="${height - 17}" text-anchor="middle" class="chart-axis-label">${number(rank)}</text>`;
   }).join('');
-  svg.innerHTML = `${grid}<line x1="${margin.left}" y1="${margin.top + plotHeight * .2}" x2="${width - margin.right}" y2="${margin.top + plotHeight * .2}" class="pareto-threshold"/><text x="${width - margin.right + 7}" y="${margin.top + plotHeight * .2 + 3}" class="chart-axis-label">80%</text>${bars}<polyline points="${points}" class="pareto-line"/>${dots}<text x="${margin.left}" y="${height - 3}" class="chart-axis-label">SKU RANK</text>`;
+  svg.innerHTML = `${grid}<line x1="${margin.left}" y1="${baseline}" x2="${width - margin.right}" y2="${baseline}" class="chart-grid-line"/>${bars}<polyline points="${points}" class="pareto-line"/>${ticks}<text x="${margin.left}" y="${height - 3}" class="chart-axis-label">SKU RANK · ${number(rows.length)} SKUs IN THE FULL CATALOG</text>`;
 }
 
 function actionClass(action) {
-  if (action === 'CORE STOCK') return 'core';
-  if (action === 'DROPSHIP') return 'drop';
-  return 'low';
+  return action === 'DROPSHIP' ? 'drop' : 'core';
 }
 
 function renderTable(periodReport) {
@@ -157,24 +172,36 @@ function renderTable(periodReport) {
     return matchesSearch && matchesAction;
   });
   state.visibleRows = rows;
-  $('#table-count').textContent = `${number(rows.length)} rows`;
-  $('#table-pagination').textContent = `Showing ${number(rows.length)} of ${number(periodReport.skuRows?.length || 0)} SKU records`;
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  state.tablePage = Math.max(0, Math.min(state.tablePage, pageCount - 1));
+  const start = state.tablePage * pageSize;
+  const pageRows = rows.slice(start, start + pageSize);
+  $('#table-count').textContent = `${number(rows.length)} SKU records`;
+  $('#table-pagination').textContent = `${number(rows.length ? start + 1 : 0)}–${number(Math.min(start + pageSize, rows.length))} of ${number(rows.length)} · Page ${state.tablePage + 1}/${pageCount}`;
+  $('#table-prev').disabled = state.tablePage === 0;
+  $('#table-next').disabled = state.tablePage >= pageCount - 1;
   const body = $('#sku-table-body');
-  if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="9" class="empty-cell">No products match the current filters.</td></tr>';
+  if (!pageRows.length) {
+    body.innerHTML = '<tr><td colspan="14" class="empty-cell">No products match the current filters.</td></tr>';
     return;
   }
-  body.innerHTML = rows.slice(0, 100).map((row) => `
+  body.innerHTML = pageRows.map((row) => `
     <tr>
       <td class="rank-cell numeric">${row.rank ? `#${number(row.rank)}` : '—'}</td>
       <td><div class="product-cell"><strong>${escapeHtml(row.productTitle)}</strong><small>${escapeHtml(row.sku)} · ${escapeHtml(row.category || 'Uncategorized')}</small></div></td>
-      <td class="numeric">${number(row.unitsSold)}</td>
+      <td class="numeric">${number(row.quantityOrdered)}</td>
+      <td class="numeric">${number(row.netItemsSold)}</td>
+      <td class="numeric">${number(row.reversedQuantity)}</td>
+      <td class="numeric">${currency(row.grossSales, periodReport.summary.currency)}</td>
+      <td class="numeric">${currency(row.discounts, periodReport.summary.currency)}</td>
+      <td class="numeric">${currency(row.salesReversals, periodReport.summary.currency)}</td>
       <td class="numeric">${currency(row.netSales, periodReport.summary.currency)}</td>
       <td class="share-cell numeric">${percentage(row.salesShare, 2)}<div class="mini-bar"><span style="width:${Math.max(0, Math.min(100, Number(row.salesShare) || 0))}%"></span></div></td>
       <td class="numeric">${percentage(row.cumulativeShare, 1)}</td>
       <td class="numeric">${percentage(row.grossMargin, 1)}</td>
-      <td class="numeric">${number(row.inventoryAvailable)}</td>
-      <td><span class="action-pill ${actionClass(row.action)}">${escapeHtml(row.action || 'REVIEW')}</span></td>
+      <td class="numeric">${row.inventoryAvailable === null || row.inventoryAvailable === undefined ? 'Not synced' : number(row.inventoryAvailable)}</td>
+      <td><span class="action-pill ${actionClass(row.action)}">${escapeHtml(row.action || 'STOCK REVIEW')}</span></td>
     </tr>`).join('');
 }
 
@@ -220,8 +247,8 @@ function renderHistory() {
   $('#history-month').textContent = latest.month;
   const latestMonth = latest.MONTH || latest.monthSummary || {};
   $('#history-ytd-count').textContent = number(latestMonth.totalUniqueSkus ?? latest.YTD2026?.totalUniqueSkus);
-  $('#history-ytd-pareto').textContent = number(latestMonth.top80SkuCount ?? latest.YTD2026?.top80SkuCount);
-  $('#history-fy-count').textContent = currency(latestMonth.netSales ?? latest.YTD2026?.netSales, latestMonth.currency || 'USD');
+  $('#history-ytd-pareto').textContent = number(latestMonth.concentrationGini ?? latest.YTD2026?.concentrationGini, 2);
+  $('#history-fy-count').textContent = currency(latestMonth.netSales ?? latest.FY2025?.netSales, latestMonth.currency || 'USD');
   $('#history-hint').textContent = snapshots.length > 1
     ? `${number(snapshots.length)} monthly snapshots stored. Compare the latest month with the previous snapshot to identify changes.`
     : 'One snapshot is available. The month-over-month comparison will become more useful after the next scheduled refresh.';
@@ -285,7 +312,7 @@ function render() {
   $('#updated-at').textContent = generatedAt && !Number.isNaN(generatedAt.valueOf())
     ? `Last refreshed ${generatedAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`
     : 'Awaiting first refresh';
-  $('#table-footnote').textContent = periodReport.dataQuality?.paretoBasis || 'SKU values are distinct product identifiers, not units sold.';
+  $('#table-footnote').textContent = periodReport.dataQuality?.salesBasis || 'Sales metrics are sourced directly from ShopifyQL; SKU count is distinct variant codes, not units.';
 }
 
 async function loadSelection() {
@@ -315,15 +342,17 @@ async function refreshData() {
 }
 
 function bindEvents() {
-  $('#store-select').addEventListener('change', async (event) => { state.storeKey = event.target.value; state.monthKey = ''; await loadSelection().catch((error) => showToast(error.message)); });
+  $('#store-select').addEventListener('change', async (event) => { state.storeKey = event.target.value; state.monthKey = ''; state.tablePage = 0; await loadSelection().catch((error) => showToast(error.message)); });
   $('#month-select').addEventListener('change', async (event) => {
     state.monthKey = event.target.value;
+    state.tablePage = 0;
     state.periodKey = 'MONTH';
     $('#period-select').value = 'MONTH';
     await loadSelection().catch((error) => showToast(error.message));
   });
   $('#period-select').addEventListener('change', async (event) => {
     state.periodKey = event.target.value;
+    state.tablePage = 0;
     if (state.periodKey !== 'MONTH') {
       state.monthKey = '';
       $('#month-select').value = '';
@@ -337,13 +366,100 @@ function bindEvents() {
     window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}`;
   });
   $('#sku-search').addEventListener('input', () => {
+    state.tablePage = 0;
     const periodReport = getCurrentPeriod();
     if (periodReport) renderTable(periodReport);
   });
   $('#action-filter').addEventListener('change', () => {
+    state.tablePage = 0;
     const periodReport = getCurrentPeriod();
     if (periodReport) renderTable(periodReport);
   });
+  $('#table-prev').addEventListener('click', () => {
+    state.tablePage = Math.max(0, state.tablePage - 1);
+    const periodReport = getCurrentPeriod();
+    if (periodReport) renderTable(periodReport);
+  });
+  $('#table-next').addEventListener('click', () => {
+    state.tablePage += 1;
+    const periodReport = getCurrentPeriod();
+    if (periodReport) renderTable(periodReport);
+  });
+
+  const helpContent = {
+    'sku-count': {
+      title: 'Unique SKUs sold',
+      body: `<p>This is the number of distinct, non-empty product variant SKU codes with sales activity in the selected period.</p><p>It is not the number of units sold and it is not the number of orders. If the same SKU appears in 50 orders, it is counted once.</p><p>Shopify product-level reports can combine several variants. This dashboard counts at the variant-SKU level.</p>`
+    },
+    'quantity-ordered': {
+      title: 'Quantity ordered',
+      body: `<p>The original number of units ordered before quantities are removed by later adjustments.</p><p>One SKU can have 524 units ordered even if fewer units remain sold after refunds, returns, cancellations or order edits.</p>`
+    },
+    'net-items': {
+      title: 'Net items sold',
+      body: `<p>The number of items remaining after Shopify accounts for reversed quantities.</p><p>Example: 524 units ordered and 20 units reversed results in 504 net items sold. This is why unit totals can differ from the original order quantity.</p>`
+    },
+    'reversed-quantity': {
+      title: 'Reversed quantity',
+      body: `<p>The quantity removed from orders through refunds, returns, cancellations or order edits. Shopify can display this as a negative number.</p><p>It is not limited to physical products returned to the warehouse. It includes broader order adjustments.</p>`
+    },
+    'gross-sales': {
+      title: 'Gross sales',
+      body: `<p>Product sales value before discounts and sales reversals. It excludes taxes, shipping, duties and fees.</p>`
+    },
+    'discounts': {
+      title: 'Discounts',
+      body: `<p>The value deducted from product sales through discounts. The value and sign shown follow ShopifyQL's sales report output.</p>`
+    },
+    'sales-reversals': {
+      title: 'Sales reversals',
+      body: `<p>Value removed from orders through refunds, returns, cancellations or order edits. It is broader than physical returns alone.</p><p>Shopify renamed older returns metrics to sales reversals to make this distinction clearer.</p>`
+    },
+    'net-sales': {
+      title: 'Net product sales',
+      body: `<p>Shopify's product sales revenue after discounts and sales reversals, excluding taxes, shipping, duties and fees.</p><p>The dashboard reads this metric directly from ShopifyQL rather than multiplying an order line total by its quantity.</p>`
+    },
+    'gross-margin': {
+      title: 'Gross margin and cost coverage',
+      body: `<p>Gross margin is gross profit divided by net sales where product cost is recorded.</p><p>This report uses the current Shopify unit cost multiplied by net items sold. Shopify does not provide historical unit costs through the current workflow, so historical gross margin is an estimate when costs have changed.</p><p>Cost coverage shows the share of net sales for which a unit cost is available. Compare the coverage before relying on the margin.</p>`
+    },
+    'concentration': {
+      title: 'SKU sales concentration',
+      body: `<p>All SKU records are ranked by net sales. The cumulative line shows how much of total net sales is accounted for as more SKUs are included.</p><p>No fixed 80/20 split is assumed and the chart is not limited to a Top 10. The entire SKU catalog is included in the calculation.</p><p>The Gini index compares how evenly sales are distributed across SKUs. Higher values mean a larger share of sales is concentrated in fewer SKUs.</p>`
+    },
+    'dropshipping': {
+      title: 'Dropshipping classification',
+      body: `<p>A SKU is classified as dropshipping when its order or product tags match the configured tags, or when line-item attributes identify supplier fulfillment.</p><p>Products without those indicators are grouped as stocked / untagged. If your store uses a different dropshipping tag, the configured tag list must be updated.</p>`
+    },
+    'why-different': {
+      title: 'Why can Shopify and this dashboard show different values?',
+      body: `<p><strong>Sales source:</strong> This dashboard uses ShopifyQL's <code>FROM sales</code> dataset for gross sales, discounts, sales reversals, net sales and quantity metrics. These are not reconstructed from order line totals.</p><p><strong>SKU vs. product grouping:</strong> The dashboard groups by <code>product_variant_sku</code>. A product-level report can combine multiple variants, so product totals and SKU totals may differ.</p><p><strong>Quantity definitions:</strong> Quantity ordered is before reversals; net items sold is after reversals; reversed quantity includes refunds, returns, cancellations and order edits. These are three different measures.</p><p><strong>Date attribution:</strong> Shopify's sales dataset records sale and adjustment events. A refund or edit can be attributed to the date the adjustment occurred, not only the original order date. A report filtered by order creation date can therefore differ.</p><p><strong>Filters:</strong> To compare the same result, use the same store, date range, SKU dimension, sales metrics and filters in ShopifyQL. The example query in Shopify should use <code>product_variant_sku</code> and the same period selected here.</p><p><strong>Other fields:</strong> Product titles and current unit costs come from Shopify Admin product/order data. Titles can change over time, and current costs are not historical costs.</p>`
+    }
+  };
+
+  function openHelp(key) {
+    const item = helpContent[key] || helpContent['why-different'];
+    $('#help-dialog-title').textContent = item.title;
+    $('#help-dialog-body').innerHTML = item.body;
+    const dialog = $('#help-dialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-help]');
+    if (trigger) openHelp(trigger.dataset.help);
+  });
+  const closeHelp = () => {
+    const dialog = $('#help-dialog');
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  };
+  $('#help-dialog-close').addEventListener('click', closeHelp);
+  $('#help-dialog-done').addEventListener('click', closeHelp);
+  $('#help-dialog').addEventListener('click', (event) => {
+    if (event.target === $('#help-dialog')) closeHelp();
+  });
+
   $('#theme-toggle').addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
