@@ -57,11 +57,14 @@ jobs:
       - name: Refresh both stores and archive monthly JSON
         run: npm run refresh
 
+      - name: Prepare Cloudflare Pages data assets
+        run: node scripts/build-pages-data.mjs
+
       - name: Commit monthly and annual JSON archives
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest-report.json data/archive/
+          git add data/latest-report.json data/archive/ public/data/
           if git diff --cached --quiet; then
             echo "No report changes to commit."
           else
