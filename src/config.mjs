@@ -20,7 +20,7 @@ function normalizeStore(value) { return (value || '').trim().replace(/^https?:\/
 
 export function getConfig() {
   const stores = [
-    { key: 'equestrian', name: 'Equestrian Labs', shopifyStore: normalizeStore(process.env.EQUESTRIAN_SHOPIFY_STORE), shopifyAccessToken: (process.env.EQUESTRIAN_SHOPIFY_TOKEN || '').trim() },
+    { key: 'equestrian', name: 'Corro', shopifyStore: normalizeStore(process.env.EQUESTRIAN_SHOPIFY_STORE), shopifyAccessToken: (process.env.EQUESTRIAN_SHOPIFY_TOKEN || '').trim() },
     { key: 'cavali', name: 'Cavali', shopifyStore: normalizeStore(process.env.CAVALI_SHOPIFY_STORE), shopifyAccessToken: (process.env.CAVALI_SHOPIFY_TOKEN || '').trim() }
   ];
   return {

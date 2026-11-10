@@ -5,7 +5,7 @@ export async function onRequestGet(context) {
     const latest = await readAssetJson(context,"/data/latest-report.json");
     const stores = ["equestrian","cavali"].map((key) => ({
       key,
-      name: key === "equestrian" ? "Equestrian Labs" : "Cavali",
+      name: key === "equestrian" ? "Corro" : "Cavali",
       store: latest?.stores?.[key]?.shopifyStore || null,
       configured: Boolean(latest?.stores?.[key]?.report)
     }));

@@ -218,9 +218,10 @@ function renderHistory() {
   }
   const latest = snapshots[snapshots.length - 1];
   $('#history-month').textContent = latest.month;
-  $('#history-ytd-count').textContent = number(latest.YTD2026?.totalUniqueSkus);
-  $('#history-ytd-pareto').textContent = number(latest.YTD2026?.top80SkuCount);
-  $('#history-fy-count').textContent = number(latest.FY2025?.totalUniqueSkus);
+  const latestMonth = latest.MONTH || latest.monthSummary || {};
+  $('#history-ytd-count').textContent = number(latestMonth.totalUniqueSkus ?? latest.YTD2026?.totalUniqueSkus);
+  $('#history-ytd-pareto').textContent = number(latestMonth.top80SkuCount ?? latest.YTD2026?.top80SkuCount);
+  $('#history-fy-count').textContent = currency(latestMonth.netSales ?? latest.YTD2026?.netSales, latestMonth.currency || 'USD');
   $('#history-hint').textContent = snapshots.length > 1
     ? `${number(snapshots.length)} monthly snapshots stored. Compare the latest month with the previous snapshot to identify changes.`
     : 'One snapshot is available. The month-over-month comparison will become more useful after the next scheduled refresh.';
@@ -233,19 +234,18 @@ function renderHistory() {
   const bottom = 38;
   const plotW = width - left - right;
   const plotH = height - top - bottom;
-  const values = snapshots.flatMap((item) => [Number(item.YTD2026?.totalUniqueSkus) || 0, Number(item.FY2025?.totalUniqueSkus) || 0]);
+  const values = snapshots.map((item) => Number((item.MONTH || item.YTD2026)?.totalUniqueSkus) || 0);
   const maxValue = Math.max(...values, 1) * 1.12;
   const x = (index) => snapshots.length === 1 ? left + plotW / 2 : left + (index / (snapshots.length - 1)) * plotW;
   const y = (value) => top + plotH - (value / maxValue) * plotH;
-  const ytdPoints = snapshots.map((item, index) => `${x(index)},${y(Number(item.YTD2026?.totalUniqueSkus) || 0)}`).join(' ');
-  const fyPoints = snapshots.map((item, index) => `${x(index)},${y(Number(item.FY2025?.totalUniqueSkus) || 0)}`).join(' ');
+  const monthPoints = snapshots.map((item, index) => `${x(index)},${y(Number((item.MONTH || item.YTD2026)?.totalUniqueSkus) || 0)}`).join(' ');
   const grid = [0, .25, .5, .75, 1].map((ratio) => {
     const yy = top + plotH * (1 - ratio);
     return `<line x1="${left}" y1="${yy}" x2="${width - right}" y2="${yy}" class="chart-grid-line"/><text x="${left - 10}" y="${yy + 3}" text-anchor="end" class="chart-axis-label">${number(maxValue * ratio)}</text>`;
   }).join('');
   const labels = snapshots.map((item, index) => `<text x="${x(index)}" y="${height - 10}" text-anchor="middle" class="chart-axis-label">${escapeHtml(item.month.slice(2))}</text>`).join('');
-  const circles = (items, key, className) => items.map((item, index) => `<circle cx="${x(index)}" cy="${y(Number(item[key]?.totalUniqueSkus) || 0)}" r="3.5" class="${className}"/>`).join('');
-  svg.innerHTML = `${grid}<polyline points="${fyPoints}" class="history-line-fy"/><polyline points="${ytdPoints}" class="history-line-ytd"/>${circles(snapshots, 'FY2025', 'history-point-fy')}${circles(snapshots, 'YTD2026', 'history-point-ytd')}${labels}`;
+  const circles = snapshots.map((item, index) => `<circle cx="${x(index)}" cy="${y(Number((item.MONTH || item.YTD2026)?.totalUniqueSkus) || 0)}" r="3.5" class="history-point-ytd"/>`).join('');
+  svg.innerHTML = `${grid}<polyline points="${monthPoints}" class="history-line-ytd"/>${circles}${labels}`;
 }
 
 function renderSources() {
@@ -316,10 +316,21 @@ async function refreshData() {
 
 function bindEvents() {
   $('#store-select').addEventListener('change', async (event) => { state.storeKey = event.target.value; state.monthKey = ''; await loadSelection().catch((error) => showToast(error.message)); });
-  $('#month-select').addEventListener('change', async (event) => { state.monthKey = event.target.value; await loadSelection().catch((error) => showToast(error.message)); });
-  $('#period-select').addEventListener('change', (event) => {
+  $('#month-select').addEventListener('change', async (event) => {
+    state.monthKey = event.target.value;
+    state.periodKey = 'MONTH';
+    $('#period-select').value = 'MONTH';
+    await loadSelection().catch((error) => showToast(error.message));
+  });
+  $('#period-select').addEventListener('change', async (event) => {
     state.periodKey = event.target.value;
-    render();
+    if (state.periodKey !== 'MONTH') {
+      state.monthKey = '';
+      $('#month-select').value = '';
+      await loadSelection().catch((error) => showToast(error.message));
+    } else {
+      render();
+    }
   });
   $('#refresh-button').addEventListener('click', refreshData);
   $('#export-button').addEventListener('click', () => {

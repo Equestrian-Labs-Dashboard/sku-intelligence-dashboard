@@ -1,6 +1,6 @@
 # SKU Intelligence Dashboard
 
-A private, English-language SKU analytics dashboard for two independent Shopify stores: **Equestrian Labs** and **Cavali**. It supports FY 2025, 2026 YTD, the selected calendar month, Pareto 80/20, gross margin with/without dropshipping, inventory prioritization, CSV export and monthly JSON archives.
+A private, English-language SKU analytics dashboard for two independent Shopify stores: **Corro** and **Cavali**. It supports FY 2025, 2026 YTD, the selected calendar month, Pareto 80/20, gross margin with/without dropshipping, inventory prioritization, CSV export and monthly JSON archives.
 
 ## 1. GitHub repository setup
 
@@ -68,7 +68,7 @@ Open `http://127.0.0.1:3000`. On Windows, `start-dashboard.bat` starts the local
 
 ## 6. Dashboard controls
 
-- **Store:** switch between Equestrian Labs and Cavali.
+- **Store:** switch between Corro and Cavali.
 - **Month archive:** select a saved `YYYY-MM` snapshot; Latest available selects the newest archive.
 - **Reporting period:** Selected Month, 2026 Year to Date or Full Year 2025.
 - **Refresh data:** refreshes both stores and writes the current month's JSON archive.
@@ -111,3 +111,9 @@ Bulk Operations retrieves orders, line items, and refund identifiers. To comply 
 ## Customer-facing deployment
 
 Deploy the `public/` directory with Cloudflare Pages and keep the `functions/` directory at the repository root. Follow `CLOUDFLARE_PAGES_SETUP.md`. GitHub Actions remains responsible for Shopify extraction and automatically publishes protected JSON report assets for Cloudflare Pages. Do not deploy this Node.js server to GitHub Pages.
+
+## Reporting filters and store naming
+
+The customer-facing store label for `equestrian-labs.myshopify.com` is **Corro**. The internal store key and GitHub Secret names remain `equestrian` and `EQUESTRIAN_*`; do not rename the credentials. The Month / Year Archive selector lists each archived month from 2025 and 2026. The Reporting Period selector provides Selected Month, Full Year 2025, and 2026 Year to Date.
+
+Each monthly refresh retrieves the FY2025 and 2026 YTD Shopify datasets once per store, then derives month-level SKU/Pareto/margin reports locally. This backfills all months in 2025 and all months through the current month in 2026. The archive stores the monthly SKU detail and compact FY2025/YTD2026 comparison summaries.

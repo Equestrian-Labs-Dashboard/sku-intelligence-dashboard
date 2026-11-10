@@ -10,7 +10,7 @@ export async function onRequestGet(context) {
     for (const month of months) {
       const saved = await readAssetJson(context,`/data/archive/${store}/${month.slice(0,4)}/${month}.json`);
       if (!saved?.report?.periods) continue;
-      snapshots.push({month,FY2025:saved.report.periods.FY2025?.summary,YTD2026:saved.report.periods.YTD2026?.summary});
+      snapshots.push({month,MONTH:saved.report.periods.MONTH?.summary,FY2025:saved.report.periods.FY2025?.summary,YTD2026:saved.report.periods.YTD2026?.summary});
     }
     return Response.json({snapshots},{headers:{"cache-control":"private, no-store"}});
   } catch (error) { return safeError(error); }
