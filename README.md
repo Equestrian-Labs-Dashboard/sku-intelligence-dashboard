@@ -1,210 +1,92 @@
 # SKU Intelligence Dashboard
 
-A lightweight, responsive dashboard for SKU performance, Pareto 80/20 analysis, inventory prioritization, monthly reporting, and gross margin comparison with and without dropshipping.
+A private, English-language SKU analytics dashboard for two independent Shopify stores: **Equestrian Labs** and **Cavali**. It supports FY 2025, 2026 YTD, the selected calendar month, Pareto 80/20, gross margin with/without dropshipping, inventory prioritization, CSV export and monthly JSON archives.
 
-The dashboard interface, labels, charts, exports, and documentation are written in English.
+## 1. GitHub repository setup
 
-## Features
-
-- Distinct SKU counts for **Full Year 2025** and **2026 Year to Date**.
-- SKU-level sales ranking with sales share and cumulative contribution.
-- Pareto analysis that counts the SKU that crosses the 80% threshold.
-- Remaining SKU count outside the 80% sales group.
-- Product table with units sold, net sales, gross profit, gross margin, available inventory, and an inventory action label.
-- Gross margin comparison including and excluding products classified as dropshipping.
-- Cost coverage indicator so missing product costs are not silently treated as zero.
-- Monthly snapshots, with up to 36 months retained in `data/history.json`.
-- CSV export for each reporting period.
-- Responsive light and dark themes.
-- Shopify Admin GraphQL integration.
-- Poneva connection status and a reserved adapter for account-specific reporting integration.
-- Monthly GitHub Actions workflow, plus manual refresh.
-- Automated tests for SKU deduplication, Pareto threshold logic, margin comparison, refunds, and reporting periods.
-
-## Technology
-
-- Node.js 20 or newer.
-- Native Node.js HTTP server and `fetch` API.
-- HTML, CSS, and vanilla JavaScript.
-- No runtime npm dependencies are required.
-
-## Quick start
-
-1. Install Node.js 20 or newer.
-2. Clone or download this repository.
-3. Copy `.env.example` to `.env`.
-4. Add your Shopify credentials to `.env`.
-5. Start the dashboard:
-
-   ```bash
-   npm start
-   ```
-
-6. Open `http://127.0.0.1:3000`.
-7. Use **Refresh data** to retrieve live Shopify data.
-
-If Shopify credentials are not configured, the dashboard opens in Preview Mode with fictional sample data. Sample figures are not store results.
-
-## Environment variables
-
-| Variable | Required | Description |
-|---|---:|---|
-| `SHOPIFY_STORE` | Yes for live data | Shopify `myshopify.com` domain, such as `example-store.myshopify.com`. Do not enter the admin URL or a storefront custom domain. |
-| `SHOPIFY_ACCESS_TOKEN` | Yes for live data | Shopify Admin API access token. |
-| `PONEVA_STORE` | Optional until Poneva API is confirmed | Poneva store identifier from the account. |
-| `PONEVA_API_TOKEN` | Optional until Poneva API is confirmed | Poneva API token. |
-| `SHOPIFY_API_VERSION` | No | Shopify Admin GraphQL API version. Defaults to `2026-10`. |
-| `REPORT_TIMEZONE` | No | Reporting timezone. Defaults to `America/La_Paz`. |
-| `DROPSHIP_TAGS` | No | Comma-separated Shopify product/order tags used to classify dropshipping. Defaults to `dropship,dropshipping`. |
-| `PORT` | No | Local server port. Defaults to `3000`. |
-| `HOST` | No | Server bind address. Defaults to `127.0.0.1`. |
-
-Never commit `.env` or expose API tokens in browser code.
-
-## Shopify permissions
-
-Create or use a Shopify Admin API custom app with read-only access wherever possible. The integration reads:
-
-- Orders and refunds.
-- Product and variant details, tags, product type, and vendor.
-- Inventory availability.
-- Current inventory-item unit cost.
-
-For the 2025 historical report, the store/app must be granted access to older orders through Shopify's `read_all_orders` permission together with `read_orders`. Shopify normally restricts order access to the latest 60 days without older-order access. Product and inventory read permissions are also required for product metadata, available quantities, and costs. The Shopify user/app must have permission to view product costs for `unitCost` to be returned.
-
-The app does not create, edit, cancel, or refund orders.
-
-Official references:
-
-- [Shopify Admin GraphQL Order object](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Order)
-- [Shopify Admin GraphQL InventoryItem object](https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem)
-- [Shopify API access scopes](https://shopify.dev/docs/api/usage/access-scopes)
-- [Poneva integration contract and public API surfaces](https://poneva.com/docs/integration-contract)
-
-## Reporting definitions
-
-### Reporting periods
-
-- **Full Year 2025:** January 1, 2025 through December 31, 2025.
-- **2026 Year to Date:** January 1, 2026 through the report cutoff date, inclusive.
-- The report cutoff is calculated in `REPORT_TIMEZONE`.
-
-### Unique SKU count
-
-A SKU is counted once per period, regardless of how many orders or order lines contain it. A SKU is included in the unique-sold count when its net units and net product sales are positive for the period. Blank SKU values are not counted and are tracked as missing-SKU lines.
-
-### Pareto 80/20
-
-SKUs are sorted from highest to lowest net product sales. Sales share is each SKU's net sales divided by total positive SKU net sales. Cumulative share is calculated in rank order. The top-80 group includes the SKU that first brings cumulative sales to 80% or higher. The remaining group is total unique SKUs minus the top-80 group.
-
-Pareto sales are based on product line sales after discounts and successful line-item refunds. Taxes and shipping are excluded.
-
-### Gross margin
-
-`Gross Margin = (Net Sales with known cost - Cost of Goods Sold) / Net Sales with known cost × 100`
-
-The report calculates margin for rows with an available unit cost and separately shows cost coverage. Missing costs are not treated as zero.
-
-**Important cost limitation:** Shopify's inventory-item `unitCost` is the current cost available when the report runs. It is not a historical cost ledger. Historical gross margin is therefore an estimate unless historical cost data is provided separately.
-
-### Dropshipping classification
-
-A line is classified as dropshipping when its Shopify order tags or product tags match one of the configured `DROPSHIP_TAGS`, or when a line-item property contains a dropshipping indicator. Update the tags in Shopify or the configuration to match the store's actual workflow.
-
-The report does not infer dropshipping from a vendor name or product title.
-
-### Inventory action labels
-
-- **CORE STOCK:** SKU belongs to the top-80 sales group and is not classified as dropshipping.
-- **DROPSHIP:** SKU is classified as dropshipping.
-- **LOW PRIORITY:** SKU has positive sales but is outside the top-80 group.
-- **REVIEW RETURNS:** SKU has no positive net units/net sales after period refunds.
-
-These are decision-support labels, not automatic purchase orders or reorder quantities. Reorder thresholds and supplier lead times are not included because they have not been provided.
-
-## Poneva integration status
-
-The Poneva adapter is deliberately fail-safe. It reads whether `PONEVA_STORE` and `PONEVA_API_TOKEN` are configured, but it does not send requests to an unverified endpoint.
-
-The public Poneva documentation currently describes storefront/catalog search surfaces, not a sales/orders reporting API. Before enabling live reconciliation, confirm the account-specific reporting API documentation or provide a sample Poneva export and its column definitions. The adapter can then be completed without guessing endpoint paths, authentication headers, or response fields.
-
-## Local refresh and tests
-
-Run automated tests:
-
-```bash
-npm test
-```
-
-Refresh both reporting periods from Shopify and save the report/history files:
-
-```bash
-npm run refresh
-```
-
-Start the dashboard:
-
-```bash
-npm start
-```
-
-The server exposes:
-
-- `GET /api/health` — integration configuration status.
-- `GET /api/report` — latest report, or demo data before the first live refresh.
-- `GET /api/history` — monthly snapshots.
-- `GET /api/export.csv?period=FY2025` — CSV export.
-- `GET /api/export.csv?period=YTD2026` — CSV export.
-- `POST /api/refresh` — refresh Shopify data and save the report.
-
-## GitHub Actions setup
-
-Create these four repository secrets:
+1. Create a **Private** repository named `sku-intelligence-dashboard`.
+2. Upload the contents of this project to the repository root (including the hidden `.github` directory).
+3. Open **Settings → Secrets and variables → Actions → New repository secret**.
+4. Create exactly these four repository secrets:
 
 | Secret name | Value |
 |---|---|
-| `SHOPIFY_STORE` | Shopify `myshopify.com` store domain. |
-| `SHOPIFY_ACCESS_TOKEN` | Shopify Admin API access token. |
-| `PONEVA_STORE` | Poneva store identifier. |
-| `PONEVA_API_TOKEN` | Poneva API token. |
+| `EQUESTRIAN_SHOPIFY_STORE` | `equestrian-labs.myshopify.com` |
+| `EQUESTRIAN_SHOPIFY_TOKEN` | Admin API token for Equestrian Labs |
+| `CAVALI_SHOPIFY_STORE` | `cavali-club.myshopify.com` |
+| `CAVALI_SHOPIFY_TOKEN` | Admin API token for Cavali |
 
-The workflow is located at `.github/workflows/monthly-report.yml`.
+Do not include `https://` in the store domain. Never put tokens in source files, commits, screenshots or chat messages.
 
-- It runs on the first day of each month at 08:00 Bolivia time (12:00 UTC).
-- It can also be started manually from the **Actions** tab.
-- It runs the test suite before refreshing the report.
-- It updates `data/latest-report.json` and appends/replaces the current month's snapshot in `data/history.json`.
-- It commits changed report files using the repository's `GITHUB_TOKEN`.
+5. Open **Settings → Actions → General → Workflow permissions** and select **Read and write permissions**. Save.
+6. Open the **Actions** tab. Select **Monthly SKU Intelligence Report**, then **Run workflow** to perform the first refresh. The workflow validates both connections, runs tests, downloads both stores and commits the JSON archives.
 
-The repository must allow GitHub Actions to write repository contents: **Settings → Actions → General → Workflow permissions → Read and write permissions**.
+## 2. Automated monthly refresh
 
-Keep the repository private because generated report files contain business sales and margin information. Do not publish the JSON report through a public static website.
+`.github/workflows/monthly-report.yml` runs on the first day of each month at 08:00 in Bolivia (`12:00 UTC`). GitHub may start scheduled workflows a little later during periods of high load. You can also run it manually from **Actions → Monthly SKU Intelligence Report → Run workflow**.
 
-## Deployment and access control
+## 3. Monthly and annual JSON storage
 
-This repository contains a Node.js server, not a GitHub Pages-only site. GitHub Actions can refresh the report files, but GitHub Actions secrets do not become runtime secrets for GitHub Pages. To serve the interactive dashboard to a client, deploy the Node.js app to a private server/hosting service and configure the same environment variables in that hosting service. Restrict access to authorized users with the hosting provider's access controls or an authenticated reverse proxy.
+Each store is archived separately. Example:
 
-The local development server binds to `127.0.0.1` by default. Only change `HOST` to `0.0.0.0` when the app is behind appropriate network and access controls.
+```text
+data/
+  latest-report.json
+  archive/
+    equestrian/
+      2026/
+        2026-11.json
+        2026-12.json
+    cavali/
+      2026/
+        2026-11.json
+        2026-12.json
+```
 
-## Monthly history
+Each monthly JSON contains the complete SKU-level analysis for that month plus compact FY 2025 and 2026 YTD KPI/margin summaries. The latest full report is kept in `data/latest-report.json`; historical month files avoid duplicating all annual SKU rows. The dashboard month selector loads the selected store/month archive. This keeps the archive compact and avoids separate CSV or spreadsheet files. Monthly snapshots are retained in Git history; do not delete `data/archive/` if you need the historical trend.
 
-The workflow stores one snapshot per calendar month. If a manual run is repeated within the same month, that month's snapshot is replaced rather than duplicated. The latest 36 snapshots are retained.
+## 4. Shopify permissions
 
-## Data validation checklist
+Create a Shopify Admin API custom app for each store and grant the required read permissions, including orders, products, inventory and inventory item costs where available. For orders older than the default 60-day window, the app needs Shopify's approved `read_all_orders` access in addition to `read_orders`. If Shopify has not approved historical-order access, the FY 2025 report will be incomplete and the workflow may return an API permission error.
 
-Before using the dashboard for purchasing decisions:
+The integration uses Shopify Admin GraphQL API. Set `SHOPIFY_API_VERSION` in the workflow to a supported version if Shopify changes the version in use.
 
-1. Confirm Shopify historical order access is enabled.
-2. Confirm all active products have a unique, non-empty SKU.
-3. Confirm dropshipping products are tagged consistently.
-4. Confirm product costs are populated and the user has permission to view them.
-5. Compare total order and SKU results with Shopify's native reports.
-6. Reconcile with Poneva after its reporting API/export format is confirmed.
-7. Review the cutoff date and reporting timezone.
+## 5. Run locally
 
-## Security notes
+Requires Node.js 20 or newer.
 
-- Never commit `.env`, access tokens, or private exports.
-- Do not place credentials in `public/` or any browser JavaScript file.
-- Use a private repository and private hosting for customer/business data.
-- Rotate any token that is accidentally exposed.
+```bash
+cp .env.example .env
+# Fill in the four store credentials in .env
+npm ci
+npm test
+npm run refresh
+npm start
+```
+
+Open `http://127.0.0.1:3000`. On Windows, `start-dashboard.bat` starts the local server after dependencies are installed.
+
+## 6. Dashboard controls
+
+- **Store:** switch between Equestrian Labs and Cavali.
+- **Month archive:** select a saved `YYYY-MM` snapshot; Latest available selects the newest archive.
+- **Reporting period:** Selected Month, 2026 Year to Date or Full Year 2025.
+- **Refresh data:** refreshes both stores and writes the current month's JSON archive.
+- **Export CSV:** exports the selected store, month and reporting period.
+
+## 7. Calculation notes
+
+- Unique SKU means distinct non-empty SKU values with positive net units and sales; order repetition does not increase the count.
+- Pareto ranks SKUs by net product sales after discounts and refunds. The top group is the minimum number of ranked SKUs whose cumulative share reaches or exceeds 80%.
+- Gross margin is `(Net Sales - COGS) / Net Sales × 100`.
+- Current Shopify unit cost is used where available. Shopify's current unit cost is not a historical cost ledger, so historical margin is an estimate unless historical costs are separately supplied.
+- Dropshipping classification uses configured tags (`DROPSHIP_TAGS`) and matching line-item properties. Confirm that the store's product/order tagging convention is consistent.
+- Inventory recommendations are decision support, not automatic purchase orders.
+
+## 8. Deployment and data privacy
+
+GitHub Actions refreshes and stores the JSON files in the private repository. It does **not** host the interactive Node.js dashboard. To give a client a live browser URL, deploy the Node.js app to a private server/hosting service and configure the same four environment variables there. Do not publish private commercial reports through public GitHub Pages.
+
+## 9. Poneva
+
+This version connects the two Shopify stores directly. Poneva is not configured as a sales source because its account-specific reporting API contract has not been verified. Do not add guessed Poneva endpoints or credentials to this workflow.

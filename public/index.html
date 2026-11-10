@@ -40,9 +40,12 @@
           <p>Understand product concentration, profitability and inventory priorities.</p>
         </div>
         <div class="topbar-actions">
+          <label class="period-control"><span>STORE</span><select id="store-select" aria-label="Store"><option value="equestrian">Equestrian Labs</option><option value="cavali">Cavali</option></select></label>
+          <label class="period-control"><span>MONTH ARCHIVE</span><select id="month-select" aria-label="Archived month"><option value="">Latest available</option></select></label>
           <label class="period-control">
             <span>REPORTING PERIOD</span>
             <select id="period-select" aria-label="Reporting period">
+              <option value="MONTH">Selected Month</option>
               <option value="YTD2026">2026 Year to Date</option>
               <option value="FY2025">Full Year 2025</option>
             </select>
@@ -192,8 +195,8 @@
       <section class="section-block" id="data-sources">
         <div class="section-heading-row section-heading-compact"><div><div class="eyebrow">CONNECTION STATUS</div><h2>Data Sources</h2><p class="section-subtitle">Review connected systems and data readiness.</p></div></div>
         <div class="source-grid">
-          <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">S</div><span class="source-state" id="shopify-state">Checking</span></div><h3>Shopify</h3><p>Primary source for orders, SKU details, product tags, inventory availability and current unit costs.</p><div class="source-detail"><span>Store</span><strong id="shopify-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="shopify-connection">Awaiting credentials</strong></div></article>
-          <article class="panel source-card"><div class="source-card-top"><div class="source-logo poneva-logo">P</div><span class="source-state source-state-pending" id="poneva-state">Pending</span></div><h3>Poneva</h3><p>Secondary validation source. The account-specific sales reporting endpoint or a sample export is required before enabling live reconciliation.</p><div class="source-detail"><span>Store ID</span><strong id="poneva-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="poneva-connection">API contract required</strong></div></article>
+          <article class="panel source-card"><div class="source-card-top"><div class="source-logo shopify-logo">S</div><span class="source-state" id="equestrian-state">Checking</span></div><h3>Equestrian Labs</h3><p>Shopify orders, product SKU, inventory availability and unit costs.</p><div class="source-detail"><span>Store</span><strong id="equestrian-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="equestrian-connection">Awaiting credentials</strong></div></article>
+          <article class="panel source-card"><div class="source-card-top"><div class="source-logo poneva-logo">C</div><span class="source-state source-state-pending" id="cavali-state">Checking</span></div><h3>Cavali</h3><p>Second Shopify store, processed independently with its own monthly history and Pareto analysis.</p><div class="source-detail"><span>Store</span><strong id="cavali-store">Not configured</strong></div><div class="source-detail"><span>Connection</span><strong id="cavali-connection">Awaiting credentials</strong></div></article>
           <article class="panel source-card methodology-card"><div class="source-card-top"><div class="source-logo method-logo">ƒ</div><span class="source-state source-state-neutral">Methodology</span></div><h3>Calculation Rules</h3><ul><li>Unique SKU values, counted once per period.</li><li>Pareto based on net product sales.</li><li>Refunds are assigned to their refund date.</li><li>Gross margin uses available unit-cost data.</li><li>Dropshipping uses configured tags or line properties.</li></ul></article>
         </div>
       </section>

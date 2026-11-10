@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { loadEnvFile, getConfig } from './config.mjs';
-import { getIntegrationStatus, loadHistory, loadLatestReport, refreshAndSaveReport } from './report-service.mjs';
+import { getIntegrationStatus, loadHistory, loadLatestReport, loadStoreMonth, listAvailableMonths, refreshAndSaveReport } from './report-service.mjs';
 
 loadEnvFile();
 const config = getConfig();
@@ -84,28 +84,41 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && pathname === '/api/report') {
-      const report = await loadLatestReport();
-      if (report) {
-        sendJson(response, 200, report);
-        return;
-      }
+      const latest = await loadLatestReport();
+      const storeKey = url.searchParams.get('store') || 'equestrian';
+      const month = url.searchParams.get('month') || latest?.month;
+      if (latest?.month === month && latest?.stores?.[storeKey]?.report) { sendJson(response, 200, latest.stores[storeKey].report); return; }
+      const archived = month ? await loadStoreMonth(storeKey, month) : null;
+      if (archived?.report) { sendJson(response, 200, archived.report); return; }
+      if (latest?.stores?.[storeKey]?.report) { sendJson(response, 200, latest.stores[storeKey].report); return; }
       const demo = JSON.parse(await readFile(demoPath, 'utf8'));
       sendJson(response, 200, demo);
       return;
     }
 
+    if (request.method === 'GET' && pathname === '/api/months') {
+      const storeKey = url.searchParams.get('store') || 'equestrian';
+      sendJson(response, 200, { months: await listAvailableMonths(storeKey) });
+      return;
+    }
+
     if (request.method === 'GET' && pathname === '/api/history') {
-      sendJson(response, 200, await loadHistory());
+      const storeKey = url.searchParams.get('store') || 'equestrian';
+      sendJson(response, 200, await loadHistory(storeKey));
       return;
     }
 
     if (request.method === 'GET' && pathname === '/api/export.csv') {
       const periodKey = url.searchParams.get('period') || 'YTD2026';
-      if (!['FY2025', 'YTD2026'].includes(periodKey)) {
+      const storeKey = url.searchParams.get('store') || 'equestrian';
+      const month = url.searchParams.get('month');
+      if (!['FY2025', 'YTD2026', 'MONTH'].includes(periodKey)) {
         sendJson(response, 400, { error: 'Invalid period. Use FY2025 or YTD2026.' });
         return;
       }
-      const report = await loadLatestReport() || JSON.parse(await readFile(demoPath, 'utf8'));
+      const archived = month ? await loadStoreMonth(storeKey, month) : null;
+      const latest = await loadLatestReport();
+      const report = archived?.report || latest?.stores?.[storeKey]?.report || JSON.parse(await readFile(demoPath, 'utf8'));
       const csv = reportToCsv(report.periods?.[periodKey]);
       response.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -117,8 +130,8 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && pathname === '/api/refresh') {
-      if (!config.shopifyStore || !config.shopifyAccessToken) {
-        sendJson(response, 400, { error: 'Shopify credentials are missing. Configure SHOPIFY_STORE and SHOPIFY_ACCESS_TOKEN.' });
+      if (config.stores.some((store) => !store.shopifyStore || !store.shopifyAccessToken)) {
+        sendJson(response, 400, { error: 'Both Shopify stores must be configured. Check the four store-specific credentials.' });
         return;
       }
       const report = await refreshAndSaveReport(config);
@@ -139,6 +152,5 @@ const server = createServer(async (request, response) => {
 
 server.listen(config.port, config.host, () => {
   console.log(`SKU Intelligence Dashboard running at http://${config.host}:${config.port}`);
-  console.log(`Shopify configured: ${Boolean(config.shopifyStore && config.shopifyAccessToken)}`);
-  console.log(`Poneva credentials configured: ${Boolean(config.ponevaStore && config.ponevaApiToken)}`);
+  console.log(`Shopify stores configured: ${config.stores.filter((store) => store.shopifyStore && store.shopifyAccessToken).length}/2`);
 });

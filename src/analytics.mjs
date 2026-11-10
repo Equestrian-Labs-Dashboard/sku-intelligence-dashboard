@@ -267,6 +267,7 @@ export function buildPeriodReport(orders, period, options = {}) {
 export function buildReport(ordersByPeriod, periods, options = {}) {
   const fy2025 = buildPeriodReport(ordersByPeriod.FY2025 || [], periods.FY2025, options);
   const ytd2026 = buildPeriodReport(ordersByPeriod.YTD2026 || [], periods.YTD2026, options);
+  const month = buildPeriodReport(ordersByPeriod.MONTH || [], periods.MONTH, options);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -279,7 +280,8 @@ export function buildReport(ordersByPeriod, periods, options = {}) {
     reportingTimezone: options.timezone || 'America/La_Paz',
     periods: {
       FY2025: fy2025,
-      YTD2026: ytd2026
+      YTD2026: ytd2026,
+      MONTH: month
     },
     notes: [
       'Unique SKU counts are based on distinct non-empty SKU values with positive net units and net sales.',

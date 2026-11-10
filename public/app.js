@@ -4,7 +4,9 @@ const state = {
   report: null,
   history: { snapshots: [] },
   health: null,
-  periodKey: 'YTD2026',
+  periodKey: 'MONTH',
+  storeKey: 'equestrian',
+  monthKey: '',
   visibleRows: []
 };
 
@@ -37,7 +39,7 @@ function percentage(value, digits = 1) {
 }
 
 function getCurrentPeriod() {
-  return state.report?.periods?.[state.periodKey] || null;
+  return state.report?.periods?.[state.periodKey] || (state.periodKey === 'MONTH' ? state.report?.periods?.YTD2026 : null) || null;
 }
 
 function showToast(message) {
@@ -247,20 +249,24 @@ function renderHistory() {
 }
 
 function renderSources() {
-  const integrations = state.health?.integrations || {};
-  const shopify = integrations.shopify || {};
-  const poneva = integrations.poneva || {};
-  const liveShopify = Boolean(shopify.configured);
-  $('#shopify-state').textContent = liveShopify ? 'Configured' : 'Not configured';
-  $('#shopify-state').className = `source-state${liveShopify ? '' : ' source-state-pending'}`;
-  $('#shopify-store').textContent = shopify.store || 'Not configured';
-  $('#shopify-connection').textContent = liveShopify ? 'Ready for live refresh' : 'Awaiting credentials';
-  $('#poneva-state').textContent = poneva.status || 'Pending';
-  $('#poneva-store').textContent = poneva.storeConfigured ? 'Configured' : 'Not configured';
-  $('#poneva-connection').textContent = poneva.credentialsPresent ? 'Reporting endpoint required' : 'Awaiting credentials';
-  $('#sidebar-status-title').textContent = liveShopify ? 'Shopify configured' : 'Preview environment';
-  $('#sidebar-status-copy').textContent = liveShopify ? 'Live refresh available' : 'Sample data loaded';
-  $('#sidebar-status-dot').className = `status-dot ${liveShopify ? 'is-live' : 'is-warning'}`;
+  const stores = state.health?.integrations?.stores || [];
+  for (const key of ['equestrian', 'cavali']) {
+    const store = stores.find((item) => item.key === key) || {};
+    const stateNode = $(`#${key}-state`);
+    if (stateNode) {
+      stateNode.textContent = store.configured ? 'Configured' : 'Not configured';
+      stateNode.className = `source-state${store.configured ? '' : ' source-state-pending'}`;
+    }
+    const storeNode = $(`#${key}-store`);
+    const connectionNode = $(`#${key}-connection`);
+    if (storeNode) storeNode.textContent = store.store || 'Not configured';
+    if (connectionNode) connectionNode.textContent = store.configured ? 'Ready for live refresh' : 'Awaiting credentials';
+  }
+  const selected = stores.find((item) => item.key === state.storeKey);
+  const live = Boolean(selected?.configured);
+  $('#sidebar-status-title').textContent = live ? 'Shopify configured' : 'Preview environment';
+  $('#sidebar-status-copy').textContent = live ? 'Selected store is connected' : 'Sample data loaded';
+  $('#sidebar-status-dot').className = `status-dot ${live ? 'is-live' : 'is-warning'}`;
 }
 
 function render() {
@@ -282,16 +288,27 @@ function render() {
   $('#table-footnote').textContent = periodReport.dataQuality?.paretoBasis || 'SKU values are distinct product identifiers, not units sold.';
 }
 
-async function loadDashboard() {
-  const [reportResponse, historyResponse, healthResponse] = await Promise.all([
-    fetch('/api/report'), fetch('/api/history'), fetch('/api/health')
+async function loadSelection() {
+  const monthQuery = state.monthKey ? `&month=${encodeURIComponent(state.monthKey)}` : '';
+  const [reportResponse, historyResponse, healthResponse, monthsResponse] = await Promise.all([
+    fetch(`/api/report?store=${encodeURIComponent(state.storeKey)}${monthQuery}`),
+    fetch(`/api/history?store=${encodeURIComponent(state.storeKey)}`),
+    fetch('/api/health'),
+    fetch(`/api/months?store=${encodeURIComponent(state.storeKey)}`)
   ]);
-  if (!reportResponse.ok) throw new Error('Could not load the report data.');
+  if (!reportResponse.ok) throw new Error('Could not load the selected store report.');
   state.report = await reportResponse.json();
   state.history = historyResponse.ok ? await historyResponse.json() : { snapshots: [] };
   state.health = healthResponse.ok ? await healthResponse.json() : null;
+  const months = monthsResponse.ok ? (await monthsResponse.json()).months || [] : [];
+  const monthSelect = $('#month-select');
+  const selected = state.monthKey || months[0] || '';
+  monthSelect.innerHTML = `<option value="">Latest available</option>${months.map((month) => `<option value="${escapeHtml(month)}">${escapeHtml(month)}</option>`).join('')}`;
+  monthSelect.value = state.monthKey;
   render();
 }
+
+async function loadDashboard() { await loadSelection(); }
 
 async function refreshData() {
   const button = $('#refresh-button');
@@ -302,13 +319,9 @@ async function refreshData() {
     const response = await fetch('/api/refresh', { method: 'POST' });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Refresh failed.');
-    state.report = result.report;
-    const historyResponse = await fetch('/api/history');
-    state.history = historyResponse.ok ? await historyResponse.json() : state.history;
-    const healthResponse = await fetch('/api/health');
-    state.health = healthResponse.ok ? await healthResponse.json() : state.health;
-    render();
-    showToast('Shopify report refreshed successfully.');
+    state.monthKey = result.report.month;
+    await loadSelection();
+    showToast('Both Shopify stores refreshed successfully.');
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -318,13 +331,15 @@ async function refreshData() {
 }
 
 function bindEvents() {
+  $('#store-select').addEventListener('change', async (event) => { state.storeKey = event.target.value; state.monthKey = ''; await loadSelection().catch((error) => showToast(error.message)); });
+  $('#month-select').addEventListener('change', async (event) => { state.monthKey = event.target.value; await loadSelection().catch((error) => showToast(error.message)); });
   $('#period-select').addEventListener('change', (event) => {
     state.periodKey = event.target.value;
     render();
   });
   $('#refresh-button').addEventListener('click', refreshData);
   $('#export-button').addEventListener('click', () => {
-    window.location.href = `/api/export.csv?period=${encodeURIComponent(state.periodKey)}`;
+    window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}`;
   });
   $('#sku-search').addEventListener('input', () => {
     const periodReport = getCurrentPeriod();
@@ -353,6 +368,7 @@ try {
 } catch { /* storage is optional */ }
 
 bindEvents();
+$('#store-select').value = state.storeKey;
 loadDashboard().catch((error) => {
   showToast(error.message);
   $('#sku-table-body').innerHTML = '<tr><td colspan="9" class="empty-cell">Unable to load dashboard data. Check the server logs and try again.</td></tr>';

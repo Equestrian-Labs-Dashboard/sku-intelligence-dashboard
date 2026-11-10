@@ -1,73 +1,75 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
 import { getReportPeriods } from './periods.mjs';
 import { buildReport } from './analytics.mjs';
 import { fetchShopifyOrdersForPeriod } from './integrations/shopify.mjs';
-import { getPonevaStatus } from './integrations/poneva.mjs';
 
 const DATA_DIR = resolve(process.cwd(), 'data');
-const REPORT_PATH = resolve(DATA_DIR, 'latest-report.json');
-const HISTORY_PATH = resolve(DATA_DIR, 'history.json');
-
-async function readJson(path, fallback) {
-  try {
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
+const ARCHIVE_DIR = join(DATA_DIR, 'archive');
+const LATEST_PATH = join(DATA_DIR, 'latest-report.json');
+async function readJson(path, fallback) { try { return JSON.parse(await readFile(path, 'utf8')); } catch { return fallback; } }
+function shopConfig(store, config) { return { ...config, shopifyStore: store.shopifyStore, shopifyAccessToken: store.shopifyAccessToken }; }
 
 export async function refreshAndSaveReport(config) {
-  await mkdir(DATA_DIR, { recursive: true });
+  await mkdir(ARCHIVE_DIR, { recursive: true });
   const periods = getReportPeriods(new Date(), config.reportTimezone);
-  const ordersByPeriod = {};
-
-  ordersByPeriod.FY2025 = await fetchShopifyOrdersForPeriod(config, periods.FY2025);
-  ordersByPeriod.YTD2026 = await fetchShopifyOrdersForPeriod(config, periods.YTD2026);
-
-  const report = buildReport(ordersByPeriod, periods, {
-    dropshipTags: config.dropshipTags,
-    timezone: config.reportTimezone
-  });
-  report.source.poneva = getPonevaStatus(config);
-  report.source.shopifyStore = config.shopifyStore;
-
-  const history = await readJson(HISTORY_PATH, { snapshots: [] });
+  const stores = {};
   const capturedAt = new Date().toISOString();
-  const monthKey = capturedAt.slice(0, 7);
-  const snapshot = {
-    month: monthKey,
-    capturedAt,
-    FY2025: report.periods.FY2025.summary,
-    YTD2026: report.periods.YTD2026.summary,
-    FY2025Margin: report.periods.FY2025.grossMargin,
-    YTD2026Margin: report.periods.YTD2026.grossMargin
-  };
-  const snapshots = Array.isArray(history.snapshots) ? history.snapshots : [];
-  const existingIndex = snapshots.findIndex((item) => item.month === monthKey);
-  if (existingIndex >= 0) snapshots[existingIndex] = snapshot;
-  else snapshots.push(snapshot);
-  snapshots.sort((a, b) => a.month.localeCompare(b.month));
-
-  await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-  await writeFile(HISTORY_PATH, `${JSON.stringify({ snapshots: snapshots.slice(-36) }, null, 2)}\n`, 'utf8');
-  return report;
+  for (const store of config.stores) {
+    if (!store.shopifyStore || !store.shopifyAccessToken) throw new Error(`Missing credentials for ${store.name}. Configure its two GitHub Actions secrets.`);
+    const scoped = shopConfig(store, config);
+    const ordersByPeriod = {};
+    for (const key of ['FY2025', 'YTD2026', 'MONTH']) ordersByPeriod[key] = await fetchShopifyOrdersForPeriod(scoped, periods[key]);
+    const report = buildReport(ordersByPeriod, periods, { dropshipTags: config.dropshipTags, timezone: config.reportTimezone });
+    report.source.shopifyStore = store.shopifyStore;
+    report.source.storeKey = store.key;
+    report.source.storeName = store.name;
+    report.generatedAt = capturedAt;
+    stores[store.key] = { name: store.name, shopifyStore: store.shopifyStore, report };
+    const year = periods.monthKey.slice(0, 4);
+    const storeYearDir = join(ARCHIVE_DIR, store.key, year);
+    await mkdir(storeYearDir, { recursive: true });
+    const compactArchive = {
+      ...report,
+      periods: {
+        MONTH: report.periods.MONTH,
+        FY2025: { period: report.periods.FY2025.period, summary: report.periods.FY2025.summary, grossMargin: report.periods.FY2025.grossMargin },
+        YTD2026: { period: report.periods.YTD2026.period, summary: report.periods.YTD2026.summary, grossMargin: report.periods.YTD2026.grossMargin }
+      }
+    };
+    await writeFile(join(storeYearDir, `${periods.monthKey}.json`), `${JSON.stringify({ store: store.key, storeName: store.name, month: periods.monthKey, capturedAt, report: compactArchive }, null, 2)}\n`, 'utf8');
+  }
+  const combined = { generatedAt: capturedAt, month: periods.monthKey, stores, defaultStore: 'equestrian' };
+  await writeFile(LATEST_PATH, `${JSON.stringify(combined, null, 2)}\n`, 'utf8');
+  return combined;
 }
 
-export async function loadLatestReport() {
-  return readJson(REPORT_PATH, null);
+export async function loadLatestReport() { return readJson(LATEST_PATH, null); }
+export async function loadStoreMonth(storeKey, monthKey) {
+  if (!/^(equestrian|cavali)$/.test(storeKey) || !/^\d{4}-\d{2}$/.test(monthKey)) return null;
+  return readJson(join(ARCHIVE_DIR, storeKey, monthKey.slice(0, 4), `${monthKey}.json`), null);
 }
-
-export async function loadHistory() {
-  return readJson(HISTORY_PATH, { snapshots: [] });
+export async function listAvailableMonths(storeKey) {
+  if (!/^(equestrian|cavali)$/.test(storeKey)) return [];
+  const base = join(ARCHIVE_DIR, storeKey);
+  const years = await readdir(base, { withFileTypes: true }).catch(() => []);
+  const months = [];
+  for (const year of years.filter((entry) => entry.isDirectory())) {
+    const files = await readdir(join(base, year.name)).catch(() => []);
+    months.push(...files.filter((file) => /^\d{4}-\d{2}\.json$/.test(file)).map((file) => file.slice(0, 7)));
+  }
+  return [...new Set(months)].sort().reverse();
 }
-
+export async function loadHistory(storeKey = 'equestrian') {
+  const months = await listAvailableMonths(storeKey);
+  const snapshots = [];
+  for (const month of months) {
+    const saved = await loadStoreMonth(storeKey, month);
+    if (!saved?.report?.periods) continue;
+    snapshots.push({ month, FY2025: saved.report.periods.FY2025?.summary, YTD2026: saved.report.periods.YTD2026?.summary });
+  }
+  return { snapshots: snapshots.reverse() };
+}
 export function getIntegrationStatus(config) {
-  return {
-    shopify: {
-      configured: Boolean(config.shopifyStore && config.shopifyAccessToken),
-      store: config.shopifyStore || null
-    },
-    poneva: getPonevaStatus(config)
-  };
+  return { stores: config.stores.map((store) => ({ key: store.key, name: store.name, store: store.shopifyStore || null, configured: Boolean(store.shopifyStore && store.shopifyAccessToken) })) };
 }
