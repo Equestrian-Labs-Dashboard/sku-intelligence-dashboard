@@ -1,8 +1,16 @@
 import { requireSkuAccess, readAssetJson, safeError } from "../_lib/sku_api.js";
 
 function isShopifyQlReport(report) {
+  // dataQuality belongs to each reporting period (FY2025, YTD2026 and MONTH),
+  // not to the report root. Check the nested period objects so newly generated
+  // ShopifyQL reports are not incorrectly rejected as legacy reports.
+  const periodReports = Object.values(report?.periods || {});
+  const hasShopifyQlSalesSource = periodReports.some((periodReport) =>
+    String(periodReport?.dataQuality?.salesSource || "").includes("ShopifyQL FROM sales")
+  );
+
   return report?.source?.primary === "ShopifyQL sales analytics"
-    && report?.dataQuality?.salesSource?.includes("ShopifyQL FROM sales");
+    && hasShopifyQlSalesSource;
 }
 
 function outdatedReportResponse() {
