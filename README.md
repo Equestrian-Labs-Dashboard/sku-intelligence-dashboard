@@ -98,3 +98,11 @@ The Shopify connector uses smaller order pages (5 orders per request), up to 100
 ## Large Shopify order exports
 
 The Shopify connector uses GraphQL Bulk Operations for order retrieval. This avoids the 1,000-point single-query ceiling and supports orders with more than 100 line items. The workflow waits for Shopify to finish each export, downloads the JSONL result, and reconstructs orders and line items before running the SKU analysis. The Shopify custom app must have the required order, product, and inventory-item read scopes; historical orders also require Shopify approval for `read_all_orders`.
+
+## Refund-data limitation
+
+The current Shopify Bulk export retrieves orders and all order line items. Shopify rejects refund-line-item connections nested inside the `Order.refunds` list in this bulk-query shape. Therefore, refund line items are currently excluded, and each report explicitly marks `refundsIncluded: false` and states that sales/Pareto are pre-refund. Do not use these pre-refund figures as final net sales until a separate refund-ingestion workflow is implemented.
+
+## Refund ingestion compatibility
+
+Bulk Operations retrieves orders, line items, and refund identifiers. To comply with Shopify's restriction against connection fields nested inside list fields in Bulk queries, refund line-item details are fetched separately only for orders that contain refunds. This preserves refund-aware net sales without putting `refundLineItems` inside the bulk export query.

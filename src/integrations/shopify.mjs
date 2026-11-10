@@ -1,5 +1,9 @@
 import { assertShopifyConfig } from '../config.mjs';
 
+// Shopify Bulk Operations do not allow connection fields nested inside list
+// fields such as Order.refunds. Refund details are intentionally not requested
+// here; see report data-quality notes so the report never implies refunds were
+// included in net sales.
 const BULK_QUERY = (search) => `
 {
   orders(query: ${JSON.stringify(search)}, first: 250) {
@@ -38,20 +42,8 @@ const BULK_QUERY = (search) => `
           }
         }
         refunds {
-          __typename
           id
           createdAt
-          refundLineItems(first: 250) {
-            edges {
-              node {
-                __typename
-                quantity
-                subtotalSet { shopMoney { amount currencyCode } }
-                lineItem { id sku title }
-              }
-            }
-          }
-          transactions(first: 20) { edges { node { kind status } } }
         }
       }
     }
@@ -60,14 +52,20 @@ const BULK_QUERY = (search) => `
 
 async function graphql(config, query, variables = {}) {
   const url = `https://${config.shopifyStore}/admin/api/${config.shopifyApiVersion}/graphql.json`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.shopifyAccessToken
-    },
-    body: JSON.stringify({ query, variables })
-  });
+  let response;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': config.shopifyAccessToken
+      },
+      body: JSON.stringify({ query, variables })
+    });
+    if (response.status !== 429 && response.status < 500) break;
+    const retryAfter = Number(response.headers.get('retry-after'));
+    await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * (2 ** attempt), 15000)));
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`Shopify API HTTP ${response.status}: ${JSON.stringify(body).slice(0, 800)}`);
   if (body.errors?.length) throw new Error(`Shopify GraphQL error: ${body.errors.map((e) => e.message).join('; ')}`);
@@ -75,6 +73,38 @@ async function graphql(config, query, variables = {}) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchRefundDetails(config, order) {
+  if (!order.refunds?.length) return;
+  const data = await graphql(config, `
+    query OrderRefundDetails($id: ID!) {
+      order(id: $id) {
+        refunds {
+          id
+          createdAt
+          refundLineItems(first: 250) {
+            pageInfo { hasNextPage }
+            nodes {
+              quantity
+              subtotalSet { shopMoney { amount currencyCode } }
+              lineItem { id sku title }
+            }
+          }
+          transactions(first: 20) { nodes { kind status } }
+        }
+      }
+    }
+  `, { id: order.id });
+  const details = new Map((data?.order?.refunds || []).map((refund) => [refund.id, refund]));
+  order.refunds = order.refunds.map((refund) => {
+    const detail = details.get(refund.id);
+    if (!detail) return refund;
+    if (detail.refundLineItems?.pageInfo?.hasNextPage) {
+      throw new Error(`Order ${order.name || order.id} contains a refund with more than 250 lines. A paginated refund export is required.`);
+    }
+    return detail;
+  });
+}
 
 async function runBulkQuery(config, search) {
   const query = BULK_QUERY(search);
@@ -143,14 +173,9 @@ function reconstructOrders(records) {
       if (parent) parent.lineItems.nodes.push(clean);
       objects.set(clean.id, clean);
     } else if (clean.__typename === 'Refund') {
-      clean.refundLineItems = { nodes: [] };
-      clean.transactions = { nodes: clean.transactions?.edges?.map((e) => e.node) || clean.transactions?.nodes || [] };
       const parent = objects.get(record.__parentId);
       if (parent) parent.refunds.push(clean);
       objects.set(clean.id, clean);
-    } else if (clean.__typename === 'RefundLineItem') {
-      const parent = objects.get(record.__parentId);
-      if (parent) parent.refundLineItems.nodes.push(clean);
     }
   }
   return roots;
@@ -171,5 +196,10 @@ export async function fetchShopifyOrdersForPeriod(config, period) {
   const updatedOrders = await fetchOrdersBySearch(config, updatedSearch);
   const combined = new Map();
   for (const order of [...createdOrders, ...updatedOrders]) combined.set(order.id, order);
-  return [...combined.values()];
+  const result = [...combined.values()];
+  // Fetch nested refund connections separately only for orders that have refunds.
+  for (const order of result) {
+    if (order.refunds?.length) await fetchRefundDetails(config, order);
+  }
+  return result;
 }

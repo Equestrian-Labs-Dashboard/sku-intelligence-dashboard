@@ -258,8 +258,10 @@ export function buildPeriodReport(orders, period, options = {}) {
     })),
     dataQuality: {
       missingSkuLines,
+      refundsIncluded: false,
+      refundCoverage: 'Refund line items are not included in this Shopify Bulk export. Treat net sales and Pareto as pre-refund until refund ingestion is added.',
       costBasis: 'Current Shopify unit cost; historical unit costs are not reconstructed.',
-      paretoBasis: 'Net product sales after discounts and refunds, excluding taxes and shipping.'
+      paretoBasis: 'Net product sales after discounts and successfully processed refunds, excluding taxes and shipping.'
     }
   };
 }
@@ -285,7 +287,7 @@ export function buildReport(ordersByPeriod, periods, options = {}) {
     },
     notes: [
       'Unique SKU counts are based on distinct non-empty SKU values with positive net units and net sales.',
-      'Pareto ranking uses net product sales after discounts and refunds; taxes and shipping are excluded.',
+      'Pareto ranking uses net product sales after discounts and successfully processed refunds; taxes and shipping are excluded.',
       'Gross margin uses the current Shopify unit cost available at report time, not historical cost at the time of sale.',
       'Dropshipping classification depends on configured tags or matching line-item properties.'
     ]
