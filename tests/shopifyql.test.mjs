@@ -68,6 +68,7 @@ test('queries ShopifyQL for the full SKU sales bridge and paginates beyond 1,000
     assert.equal(result.currencyCode, 'USD');
     assert.equal(requests.length, 2);
     assert.match(requests[0], /FROM sales/);
+    assert.match(requests[0], /WHERE line_type = 'Product'/);
     assert.match(requests[0], /product_variant_sku/);
     assert.match(requests[0], /gross_sales, discounts, sales_reversals, net_sales/);
     assert.match(requests[0], /quantity_ordered, net_items_sold, reversed_quantity/);

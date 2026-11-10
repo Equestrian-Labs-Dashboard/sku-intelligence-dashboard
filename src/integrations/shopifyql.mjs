@@ -126,6 +126,7 @@ function buildQuery(period, offset) {
   const until = previousDate(period.endDateExclusive);
   return `FROM sales
 SHOW gross_sales, discounts, sales_reversals, net_sales, quantity_ordered, net_items_sold, reversed_quantity, product_variant_sku, product_title
+WHERE line_type = 'Product'
 GROUP BY product_variant_sku, product_title
 SINCE ${period.startDate} UNTIL ${until}
 ORDER BY net_sales DESC, product_variant_sku ASC, product_title ASC
@@ -181,7 +182,7 @@ export async function fetchShopifySalesBySku(config, period) {
     const rawRows = result.tableData.rows || [];
     const rows = rawRows.map((row) => normalizeRow(row, columns));
     if (rawRows.length && !rows.some((row) => String(row.product_variant_sku ?? '').trim())) {
-      throw new Error(`ShopifyQL returned ${rawRows.length} rows but no product_variant_sku values for ${config.shopifyStore} (${period.label}). The old report has not been replaced.`);
+      throw new Error(`ShopifyQL returned ${rawRows.length} rows but no product_variant_sku values for ${config.shopifyStore} (${period.label}), even after filtering line_type = 'Product'. The result may have an unexpected ShopifyQL row shape or missing SKU dimension. The old report has not been replaced.`);
     }
     for (const row of rows) {
       const sku = String(row.product_variant_sku ?? '').trim();
