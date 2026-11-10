@@ -2,6 +2,15 @@ import { assertShopifyConfig } from '../config.mjs';
 
 const PAGE_SIZE = 1000;
 const MAX_ROWS = 50000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let lastShopifyRequestAt = 0;
+
+async function waitForShopifyRequestSlot() {
+  const minimumIntervalMs = 600;
+  const waitMs = minimumIntervalMs - (Date.now() - lastShopifyRequestAt);
+  if (waitMs > 0) await sleep(waitMs);
+  lastShopifyRequestAt = Date.now();
+}
 
 function previousDate(endDateExclusive) {
   const date = new Date(`${endDateExclusive}T00:00:00Z`);
@@ -22,11 +31,47 @@ function numeric(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isThrottleResponse(response, body) {
+  if (response?.status === 429) return true;
+  const errors = body?.errors || [];
+  return errors.some((error) => {
+    const code = String(error?.extensions?.code || error?.code || '').toUpperCase();
+    const message = String(error?.message || '');
+    return code === 'THROTTLED' || /rate.?limit|throttl|too many requests|retry later/i.test(message);
+  });
+}
+
+function throttleDelay(response, body, attempt) {
+  const retryAfter = Number(response?.headers?.get?.('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(60000, Math.max(500, retryAfter * 1000));
+  }
+
+  const status = body?.extensions?.cost?.throttleStatus
+    || body?.errors?.find((error) => error?.extensions?.cost?.throttleStatus)?.extensions?.cost?.throttleStatus;
+  const available = Number(status?.currentlyAvailable);
+  const restoreRate = Number(status?.restoreRate);
+  const requested = Number(body?.extensions?.cost?.requestedQueryCost);
+  if (Number.isFinite(available) && Number.isFinite(restoreRate) && restoreRate > 0) {
+    const deficit = Number.isFinite(requested) && requested > 0 ? Math.max(1, requested - available) : Math.max(1, 100 - available);
+    return Math.min(60000, Math.max(500, Math.ceil((deficit / restoreRate) * 1000) + 250));
+  }
+
+  // ShopifyQL can return a plain "Rate limited" GraphQL error without
+  // throttleStatus. Use bounded exponential backoff rather than failing
+  // immediately or retrying in a tight loop.
+  return Math.min(60000, Math.max(1000, 1000 * (2 ** attempt)));
+}
+
 async function graphql(config, query, variables = {}) {
   const url = `https://${config.shopifyStore}/admin/api/${config.shopifyApiVersion}/graphql.json`;
-  let response;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    response = await fetch(url, {
+  const maxAttempts = 8;
+  let lastBody = {};
+  let lastResponse = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await waitForShopifyRequestSlot();
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -34,30 +79,47 @@ async function graphql(config, query, variables = {}) {
       },
       body: JSON.stringify({ query, variables })
     });
-    if (response.status !== 429 && response.status < 500) break;
-    const retryAfter = Number(response.headers.get('retry-after'));
-    const delay = Number.isFinite(retryAfter) && retryAfter > 0
-      ? retryAfter * 1000
-      : Math.min(1000 * (2 ** attempt), 15000);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    const body = await response.json().catch(() => ({}));
+    lastBody = body;
+    lastResponse = response;
+
+    if (isThrottleResponse(response, body)) {
+      if (attempt === maxAttempts - 1) {
+        throw new Error(`Shopify GraphQL remained rate limited after ${maxAttempts} attempts for ${config.shopifyStore}. The workflow stopped without publishing partial report data. Last response: ${(body.errors || []).map((item) => item.message).join('; ') || `HTTP ${response.status}`}`);
+      }
+      const delay = throttleDelay(response, body, attempt);
+      console.warn(`[ShopifyQL] Rate limited by ${config.shopifyStore}; retry ${attempt + 1}/${maxAttempts - 1} in ${delay} ms.`);
+      await sleep(delay);
+      continue;
+    }
+
+    if (response.status >= 500) {
+      if (attempt === maxAttempts - 1) {
+        throw new Error(`Shopify GraphQL HTTP ${response.status} after ${maxAttempts} attempts for ${config.shopifyStore}.`);
+      }
+      const delay = Math.min(30000, 1000 * (2 ** attempt));
+      console.warn(`[ShopifyQL] Shopify server returned HTTP ${response.status}; retrying in ${delay} ms.`);
+      await sleep(delay);
+      continue;
+    }
+
+    const details = body.errors?.map((item) => item.message).join('; ') || JSON.stringify(body).slice(0, 500);
+    if (!response.ok) {
+      if (/read_reports|access denied|not authorized|protected customer data/i.test(details)) {
+        throw new Error(`ShopifyQL access is unavailable for ${config.shopifyStore}. Enable the Shopify Admin API read_reports scope (and complete any Shopify protected-data approval required for ShopifyQL), reinstall/update the app, and replace that store's token in GitHub Secrets. Details: ${details}`);
+      }
+      throw new Error(`Shopify GraphQL HTTP ${response.status}: ${details}`);
+    }
+    if (body.errors?.length) {
+      if (/read_reports|access denied|not authorized|protected customer data/i.test(details)) {
+        throw new Error(`ShopifyQL access is unavailable for ${config.shopifyStore}. Enable the read_reports scope and update the Shopify app/token. Details: ${details}`);
+      }
+      throw new Error(`Shopify GraphQL error: ${details}`);
+    }
+    return body.data;
   }
 
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const details = body.errors?.map((item) => item.message).join('; ') || JSON.stringify(body).slice(0, 500);
-    if (/read_reports|access denied|not authorized|protected customer data/i.test(details)) {
-      throw new Error(`ShopifyQL access is unavailable for ${config.shopifyStore}. Enable the Shopify Admin API read_reports scope (and complete any Shopify protected-data approval required for ShopifyQL), reinstall/update the app, and replace that store's token in GitHub Secrets. Details: ${details}`);
-    }
-    throw new Error(`Shopify GraphQL HTTP ${response.status}: ${details}`);
-  }
-  if (body.errors?.length) {
-    const details = body.errors.map((item) => item.message).join('; ');
-    if (/read_reports|access denied|not authorized|protected customer data/i.test(details)) {
-      throw new Error(`ShopifyQL access is unavailable for ${config.shopifyStore}. Enable the read_reports scope and update the Shopify app/token. Details: ${details}`);
-    }
-    throw new Error(`Shopify GraphQL error: ${details}`);
-  }
-  return body.data;
+  throw new Error(`Shopify GraphQL request failed for ${config.shopifyStore}: ${(lastBody.errors || []).map((item) => item.message).join('; ') || lastResponse?.status || 'unknown error'}`);
 }
 
 function buildQuery(period, offset) {

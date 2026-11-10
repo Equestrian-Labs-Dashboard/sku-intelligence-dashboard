@@ -118,3 +118,91 @@ test('rejects incomplete ShopifyQL columns rather than silently publishing zero 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('retries ShopifyQL GraphQL rate-limit errors returned with HTTP 200', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        errors: [{ message: 'Rate limited. Please retry later.' }]
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      data: {
+        shop: { currencyCode: 'USD' },
+        shopifyqlQuery: {
+          tableData: {
+            columns: [
+              'gross_sales', 'discounts', 'sales_reversals', 'net_sales',
+              'quantity_ordered', 'net_items_sold', 'reversed_quantity',
+              'product_variant_sku', 'product_title'
+            ].map((name) => ({ name, dataType: 'STRING', displayName: name })),
+            rows: [{
+              gross_sales: '100',
+              discounts: '-10',
+              sales_reversals: '-5',
+              net_sales: '85',
+              quantity_ordered: 2,
+              net_items_sold: 1,
+              reversed_quantity: -1,
+              product_variant_sku: 'SKU-RETRY',
+              product_title: 'Retry product'
+            }]
+          },
+          parseErrors: []
+        }
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const result = await fetchShopifySalesBySku(config, period);
+    assert.equal(calls, 2);
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].sku, 'SKU-RETRY');
+    assert.equal(result.rows[0].netSales, 85);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('retries GraphQL THROTTLED responses using throttle restore information', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }],
+        extensions: { cost: { requestedQueryCost: 10, throttleStatus: { currentlyAvailable: 0, restoreRate: 1000 } } }
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      data: {
+        shop: { currencyCode: 'USD' },
+        shopifyqlQuery: {
+          tableData: {
+            columns: [
+              'gross_sales', 'discounts', 'sales_reversals', 'net_sales',
+              'quantity_ordered', 'net_items_sold', 'reversed_quantity',
+              'product_variant_sku', 'product_title'
+            ].map((name) => ({ name, dataType: 'STRING', displayName: name })),
+            rows: []
+          },
+          parseErrors: []
+        }
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const result = await fetchShopifySalesBySku(config, period);
+    assert.equal(calls, 2);
+    assert.equal(result.rows.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
