@@ -44,6 +44,78 @@ function getCurrentPeriod() {
   return state.report?.periods?.[state.periodKey] || (state.periodKey === 'MONTH' ? state.report?.periods?.YTD2026 : null) || null;
 }
 
+function getChannelFilteredPeriod(periodReport) {
+  if (!periodReport || state.storeKey !== 'equestrian' || state.channelFilter === 'ALL') return periodReport;
+  const selectedType = state.channelFilter;
+  const rows = (periodReport.skuRows || [])
+    .filter((row) => (row.channelTypes || []).includes(selectedType))
+    .map((row) => ({ ...row }))
+    .sort((a, b) => Number(b.netSales || 0) - Number(a.netSales || 0)
+      || Number(b.netItemsSold || 0) - Number(a.netItemsSold || 0)
+      || String(a.sku).localeCompare(String(b.sku)));
+  const sum = (key, sourceRows = rows) => sourceRows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
+  const netSales = sum('netSales');
+  let cumulative = 0;
+  rows.forEach((row, index) => {
+    cumulative += Number(row.netSales) || 0;
+    row.rank = index + 1;
+    row.salesShare = netSales !== 0 ? (Number(row.netSales || 0) / netSales) * 100 : 0;
+    row.cumulativeShare = netSales !== 0 ? (cumulative / netSales) * 100 : 0;
+  });
+  const uniqueRows = rows.filter((row) => Number(row.quantityOrdered || 0) > 0 || Number(row.netItemsSold || 0) > 0);
+  const positiveSales = rows.map((row) => Math.max(0, Number(row.netSales) || 0)).filter((value) => value > 0).sort((a, b) => a - b);
+  const totalPositiveSales = positiveSales.reduce((total, value) => total + value, 0);
+  const n = positiveSales.length;
+  const weighted = positiveSales.reduce((total, value, index) => total + (index + 1) * value, 0);
+  const concentrationGini = n && totalPositiveSales > 0 ? ((2 * weighted) / (n * totalPositiveSales) - (n + 1) / n) * 100 : 0;
+  const marginFor = (sourceRows) => {
+    const netSalesWithKnownCost = sourceRows.reduce((total, row) => total + (Number(row.costKnownSales) || 0), 0);
+    const costOfGoodsSold = sourceRows.reduce((total, row) => total + (Number(row.costOfGoodsSold) || 0), 0);
+    const grossProfit = netSalesWithKnownCost - costOfGoodsSold;
+    const totalNetSales = sourceRows.reduce((total, row) => total + (Number(row.netSales) || 0), 0);
+    return {
+      netSales: totalNetSales, netSalesWithKnownCost, costOfGoodsSold, grossProfit,
+      grossMargin: netSalesWithKnownCost > 0 ? (grossProfit / netSalesWithKnownCost) * 100 : null,
+      costCoveragePct: totalNetSales > 0 ? Math.max(0, Math.min(100, netSalesWithKnownCost / totalNetSales * 100)) : 0
+    };
+  };
+  const withDropshipping = marginFor(rows);
+  const withoutDropshipping = marginFor(rows.filter((row) => !row.isDropship));
+  const summary = {
+    ...periodReport.summary,
+    totalUniqueSkus: uniqueRows.length,
+    totalUnitsSold: sum('netItemsSold'),
+    quantityOrdered: sum('quantityOrdered'),
+    netItemsSold: sum('netItemsSold'),
+    reversedQuantity: sum('reversedQuantity'),
+    grossSales: sum('grossSales'),
+    discounts: sum('discounts'),
+    salesReversals: sum('salesReversals'),
+    netSales,
+    unassignedSkuSales: { rowCount: 0, grossSales: 0, discounts: 0, salesReversals: 0, netSales: 0, quantityOrdered: 0, netItemsSold: 0, reversedQuantity: 0 },
+    topSkuShare: rows[0] && netSales !== 0 ? Number(rows[0].netSales || 0) / netSales * 100 : 0,
+    concentrationGini,
+    dropshipSkuCount: uniqueRows.filter((row) => row.isDropship).length
+  };
+  return {
+    ...periodReport, summary, skuRows: rows,
+    grossMargin: {
+      withDropshipping, withoutDropshipping,
+      dropshippingImpactPp: withDropshipping.grossMargin !== null && withoutDropshipping.grossMargin !== null
+        ? withDropshipping.grossMargin - withoutDropshipping.grossMargin : null
+    },
+    dataQuality: {
+      ...periodReport.dataQuality,
+      channelFilter: selectedType,
+      channelFilterBasis: 'Metrics are recalculated from SKU rows with evidence for the selected channel. SKUs classified in both channels appear in both filtered views; All channels counts each SKU once.'
+    }
+  };
+}
+
+function getDisplayedPeriod() {
+  return getChannelFilteredPeriod(getCurrentPeriod());
+}
+
 function showToast(message) {
   const toast = $('#toast');
   toast.textContent = message;
@@ -95,8 +167,18 @@ function renderKpis(periodReport) {
 }
 
 function renderPeriodComparison() {
-  const fy = state.report?.periods?.FY2025?.summary;
-  const ytd = state.report?.periods?.YTD2026?.summary;
+  const panel = document.querySelector('.period-comparison-panel');
+  const fyRaw = state.report?.periods?.FY2025;
+  const ytdRaw = state.report?.periods?.YTD2026;
+  if (!fyRaw || !ytdRaw) return;
+  const channelActive = state.storeKey === 'equestrian' && state.channelFilter !== 'ALL';
+  const comparisonUnavailable = channelActive && (!Array.isArray(fyRaw.skuRows) || !Array.isArray(ytdRaw.skuRows));
+  panel.hidden = false;
+  $('#compare-channel-note').hidden = !comparisonUnavailable;
+  $('.comparison-metrics').hidden = comparisonUnavailable;
+  if (comparisonUnavailable) return;
+  const fy = getChannelFilteredPeriod(fyRaw).summary;
+  const ytd = getChannelFilteredPeriod(ytdRaw).summary;
   if (!fy || !ytd) return;
   const delta = (before, after, digits = 0) => {
     const value = Number(after || 0) - Number(before || 0);
@@ -115,14 +197,10 @@ function renderPeriodComparison() {
   const fyGini = Number(fy.concentrationGini) || 0;
   const ytdGini = Number(ytd.concentrationGini) || 0;
   const difference = ytdGini - fyGini;
-  $('#compare-insight-title').textContent = difference > 0.5
-    ? 'SKU sales are more concentrated in 2026 YTD'
-    : difference < -0.5
-      ? 'SKU sales are less concentrated in 2026 YTD'
-      : 'SKU sales concentration is broadly similar';
+  $('#compare-insight-title').textContent = difference > 0.5 ? 'SKU sales are more concentrated in 2026 YTD'
+    : difference < -0.5 ? 'SKU sales are less concentrated in 2026 YTD' : 'SKU sales concentration is broadly similar';
   $('#compare-insight-copy').textContent = `Gini concentration index: ${number(fyGini, 2)} in FY 2025 vs. ${number(ytdGini, 2)} in 2026 YTD. Higher values indicate sales are concentrated in fewer SKUs. FY 2025 and 2026 YTD cover different lengths of time.`;
 }
-
 function renderPareto(periodReport) {
   const svg = $('#pareto-chart');
   const rows = (periodReport.skuRows || []).filter((row) => row.rank);
@@ -166,7 +244,12 @@ function renderPareto(periodReport) {
     const x = margin.left + (rank - .5) * slot;
     return `<text x="${x.toFixed(2)}" y="${height - 17}" text-anchor="middle" class="chart-axis-label">${number(rank)}</text>`;
   }).join('');
-  svg.innerHTML = `${grid}<line x1="${margin.left}" y1="${baseline}" x2="${width - margin.right}" y2="${baseline}" class="chart-grid-line"/>${bars}<polyline points="${points}" class="pareto-line"/>${ticks}<text x="${margin.left}" y="${height - 3}" class="chart-axis-label">SKU RANK · ${number(rows.length)} SKUs IN THE FULL CATALOG</text>`;
+  const cohortLabel = state.storeKey === 'equestrian' && state.channelFilter !== 'ALL'
+    ? (state.channelFilter === 'WELLINGTON' ? 'WELLINGTON WAREHOUSE' : 'SHOPIFY COLLECTIVE')
+    : 'FULL CATALOG';
+  const chip = document.querySelector('.pareto-panel .panel-chip');
+  if (chip) chip.textContent = state.channelFilter === 'ALL' || state.storeKey !== 'equestrian' ? 'FULL CATALOG' : cohortLabel;
+  svg.innerHTML = `${grid}<line x1="${margin.left}" y1="${baseline}" x2="${width - margin.right}" y2="${baseline}" class="chart-grid-line"/>${bars}<polyline points="${points}" class="pareto-line"/>${ticks}<text x="${margin.left}" y="${height - 3}" class="chart-axis-label">SKU RANK · ${number(rows.length)} SKUs IN ${cohortLabel}</text>`;
 }
 
 function actionClass(action) {
@@ -249,6 +332,12 @@ function renderMargin(periodReport) {
 }
 
 function renderHistory() {
+  const historySection = document.querySelector('#monthly-history');
+  const channelActive = state.storeKey === 'equestrian' && state.channelFilter !== 'ALL';
+  historySection.hidden = false;
+  $('#history-channel-note').hidden = !channelActive;
+  $('.history-grid').hidden = channelActive;
+  if (channelActive) return;
   const snapshots = [...(state.history?.snapshots || [])].sort((a, b) => a.month.localeCompare(b.month));
   const svg = $('#history-chart');
   if (!snapshots.length) {
@@ -327,7 +416,7 @@ function updateChannelControl() {
 
 function render() {
   if (!state.report) return;
-  const periodReport = getCurrentPeriod();
+  const periodReport = getDisplayedPeriod();
   if (!periodReport) return;
   $('#demo-banner').hidden = !state.report.source?.demo;
   renderKpis(periodReport);
@@ -407,17 +496,16 @@ function bindEvents() {
   });
   $('#sku-search').addEventListener('input', () => {
     state.tablePage = 0;
-    const periodReport = getCurrentPeriod();
+    const periodReport = getDisplayedPeriod();
     if (periodReport) renderTable(periodReport);
   });
   $('#action-filter').addEventListener('change', () => {
     state.tablePage = 0;
-    const periodReport = getCurrentPeriod();
+    const periodReport = getDisplayedPeriod();
     if (periodReport) renderTable(periodReport);
   });
   $('#channel-select').addEventListener('change', (event) => {
-    // Channel selection is a SKU Analysis table/CSV filter only.
-    // Do not call render() or update store-wide KPIs and charts.
+    // Recalculate every dashboard metric and visualization for the selected channel cohort.
     if (state.storeKey !== 'equestrian') {
       state.channelFilter = 'ALL';
       event.target.value = 'ALL';
@@ -425,17 +513,16 @@ function bindEvents() {
     }
     state.channelFilter = event.target.value;
     state.tablePage = 0;
-    const periodReport = getCurrentPeriod();
-    if (periodReport) renderTable(periodReport);
+    render();
   });
   $('#table-prev').addEventListener('click', () => {
     state.tablePage = Math.max(0, state.tablePage - 1);
-    const periodReport = getCurrentPeriod();
+    const periodReport = getDisplayedPeriod();
     if (periodReport) renderTable(periodReport);
   });
   $('#table-next').addEventListener('click', () => {
     state.tablePage += 1;
-    const periodReport = getCurrentPeriod();
+    const periodReport = getDisplayedPeriod();
     if (periodReport) renderTable(periodReport);
   });
 

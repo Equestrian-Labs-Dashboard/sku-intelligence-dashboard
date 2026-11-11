@@ -180,3 +180,12 @@ For complete online fulfillment-location coverage, the Shopify custom app should
 ## Corro-only SKU channel filter
 
 The SKU Channel selector is available only when the Corro store is selected. Its options are All channels, Wellington Warehouse and Shopify Collective. It filters the SKU Analysis table and CSV export only. Executive KPIs, Shopify sales reconciliation, full-catalog concentration charts, year comparison and gross-margin panels remain store-wide and are not recalculated by this selector. Cavali does not display the channel selector.
+
+
+## Corro channel filter behavior
+
+For Corro, the Sales Channel selector recalculates all dashboard metrics and visualizations from the selected SKU cohort: executive KPIs, Shopify sales bridge, gross margin, sales concentration, year comparison (when the archive contains SKU-level annual rows), SKU table, and CSV export. Cavali does not show this filter.
+
+Channel membership is based on SKU-level evidence: Wellington order / fulfillment location evidence and explicit Shopify Collective tags. If a SKU has evidence for both channels, its full SKU-level sales metrics are included in each corresponding filtered view. Therefore, Wellington and Collective filtered totals are separate SKU-cohort views and must not be added together. The All channels view counts each SKU once. Unassigned-SKU sales remain included only in All channels because they cannot be attributed to either channel from available evidence.
+
+Monthly History snapshots are store-wide summary snapshots and do not contain channel-level monthly SKU rows. They are therefore hidden while a Corro channel filter is active rather than showing misleading store-wide figures.

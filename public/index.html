@@ -56,7 +56,7 @@
         </div>
       </header>
 
-      <div class="channel-filter-note" id="channel-filter-note">This Corro-only filter changes the SKU Analysis table and CSV export only. Executive KPIs, sales reconciliation, concentration charts and gross margin remain unchanged and store-wide. Wellington uses order / fulfillment location evidence; Shopify Collective uses explicit tags.</div>
+      <div class="channel-filter-note" id="channel-filter-note">For Corro, selecting Wellington Warehouse or Shopify Collective recalculates all dashboard KPIs, sales reconciliation, gross margin, concentration charts, comparisons and SKU Analysis using SKUs identified in that channel. A SKU identified in both channels appears in both filtered views; All channels counts each SKU once. Sales without an assigned SKU remain in All channels only. Wellington uses order / fulfillment location evidence; Shopify Collective uses explicit tags.</div>
 
       <div class="report-data-warning" id="report-data-warning" hidden>
         <strong>Data refresh required</strong>
@@ -124,6 +124,7 @@
             <div><div class="eyebrow">YEAR-OVER-YEAR VIEW</div><h3>Full Year 2025 vs. 2026 YTD</h3><p>Compare catalog size, item movement, revenue and sales concentration. Period lengths are different.</p></div>
             <span class="panel-chip">FY 2025 / YTD 2026</span>
           </div>
+          <p id="compare-channel-note" class="channel-data-note" hidden>Channel-specific annual comparison is unavailable in this monthly archive because it contains monthly SKU rows but only store-wide annual summary snapshots. Select Latest available to compare the full channel-specific annual SKU data.</p>
           <div class="comparison-metrics">
             <div class="comparison-metric"><span>Unique SKUs sold</span><div><strong id="compare-unique-fy">—</strong><i>→</i><strong id="compare-unique-ytd">—</strong></div><small id="compare-unique-delta">—</small></div>
             <div class="comparison-metric"><span>Net items sold</span><div><strong id="compare-units-fy">—</strong><i>→</i><strong id="compare-units-ytd">—</strong></div><small id="compare-units-delta">—</small></div>
@@ -226,6 +227,7 @@
           <div><div class="eyebrow">PERIOD-OVER-PERIOD TRACKING</div><h2>Monthly History</h2><p class="section-subtitle">Track SKU counts, net items sold and sales concentration as monthly snapshots accumulate.</p></div>
           <span class="panel-chip">LAST 36 SNAPSHOTS</span>
         </div>
+        <p id="history-channel-note" class="channel-data-note" hidden>Monthly History snapshots are currently stored at store level, not by sales channel. This section is hidden while a Corro channel filter is active to avoid showing unfiltered figures.</p>
         <div class="history-grid">
           <article class="panel history-panel"><div class="panel-header"><div><h3>Unique SKU Trend</h3><p>Monthly snapshot comparison.</p></div><span class="chart-unit">SKU COUNT</span></div><div class="chart-wrap history-chart-wrap"><svg id="history-chart" viewBox="0 0 900 250" role="img" aria-label="Monthly unique SKU history"></svg></div><div class="history-legend"><span><i class="history-line-dark"></i> 2026 YTD</span><span><i class="history-line-light"></i> FY 2025</span></div></article>
           <article class="panel history-summary"><div class="eyebrow">LATEST SNAPSHOT</div><h3 id="history-month">No snapshots yet</h3><div class="history-stat"><span>Latest month unique SKUs</span><strong id="history-ytd-count">—</strong></div><div class="history-stat"><span>Latest month concentration index (Gini)</span><strong id="history-ytd-pareto">—</strong></div><div class="history-stat"><span>Latest month net product sales</span><strong id="history-fy-count">—</strong></div><p class="history-hint" id="history-hint">A snapshot is saved automatically when the monthly GitHub Action runs.</p></article>

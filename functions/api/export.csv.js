@@ -35,6 +35,21 @@ export async function onRequestGet(context) {
       return channel === "ALL"
         || (channel === "WELLINGTON" && types.includes("WELLINGTON"))
         || (channel === "COLLECTIVE" && types.includes("COLLECTIVE"));
+    }).map((row) => ({ ...row })).sort((a, b) =>
+      Number(b.netSales || 0) - Number(a.netSales || 0)
+      || Number(b.netItemsSold || 0) - Number(a.netItemsSold || 0)
+      || String(a.sku).localeCompare(String(b.sku))
+    );
+
+    // Recalculate rank and sales contribution within the selected channel
+    // cohort so CSV values match the filtered dashboard, not store-wide shares.
+    const channelNetSales = rows.reduce((sum, row) => sum + (Number(row.netSales) || 0), 0);
+    let cumulativeChannelSales = 0;
+    rows.forEach((row, index) => {
+      cumulativeChannelSales += Number(row.netSales) || 0;
+      row.rank = index + 1;
+      row.salesShare = channelNetSales !== 0 ? (Number(row.netSales) || 0) / channelNetSales * 100 : 0;
+      row.cumulativeShare = channelNetSales !== 0 ? cumulativeChannelSales / channelNetSales * 100 : 0;
     });
     const columns = [
       "Rank", "SKU", "Product", "Category", "Vendor",

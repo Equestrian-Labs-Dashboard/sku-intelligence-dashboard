@@ -530,3 +530,14 @@ tbody tr:hover { background: var(--surface-soft); }
 
 /* The channel selector is only available for Corro. */
 #channel-control[hidden], #channel-filter-note[hidden] { display: none !important; }
+
+.channel-data-note {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e5e8ed);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
