@@ -313,6 +313,18 @@ function renderSources() {
   $('#sidebar-status-dot').className = `status-dot ${live ? 'is-live' : 'is-warning'}`;
 }
 
+function updateChannelControl() {
+  const isCorro = state.storeKey === 'equestrian';
+  const control = $('#channel-control');
+  const note = $('#channel-filter-note');
+  control.hidden = !isCorro;
+  note.hidden = !isCorro;
+  if (!isCorro) {
+    state.channelFilter = 'ALL';
+    $('#channel-select').value = 'ALL';
+  }
+}
+
 function render() {
   if (!state.report) return;
   const periodReport = getCurrentPeriod();
@@ -359,6 +371,7 @@ async function loadSelection() {
   const selected = state.monthKey || months[0] || '';
   monthSelect.innerHTML = `<option value="">Latest available</option>${months.map((month) => `<option value="${escapeHtml(month)}">${escapeHtml(month)}</option>`).join('')}`;
   monthSelect.value = state.monthKey;
+  updateChannelControl();
   render();
 }
 
@@ -390,7 +403,7 @@ function bindEvents() {
   });
   $('#refresh-button').addEventListener('click', refreshData);
   $('#export-button').addEventListener('click', () => {
-    window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}&channel=${encodeURIComponent(state.channelFilter)}`;
+    window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}&channel=${encodeURIComponent(state.storeKey === 'equestrian' ? state.channelFilter : 'ALL')}`;
   });
   $('#sku-search').addEventListener('input', () => {
     state.tablePage = 0;
@@ -403,6 +416,13 @@ function bindEvents() {
     if (periodReport) renderTable(periodReport);
   });
   $('#channel-select').addEventListener('change', (event) => {
+    // Channel selection is a SKU Analysis table/CSV filter only.
+    // Do not call render() or update store-wide KPIs and charts.
+    if (state.storeKey !== 'equestrian') {
+      state.channelFilter = 'ALL';
+      event.target.value = 'ALL';
+      return;
+    }
     state.channelFilter = event.target.value;
     state.tablePage = 0;
     const periodReport = getCurrentPeriod();

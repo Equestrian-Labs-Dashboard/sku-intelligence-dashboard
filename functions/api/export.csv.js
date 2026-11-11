@@ -11,9 +11,12 @@ export async function onRequestGet(context) {
     const store = url.searchParams.get("store") || "equestrian";
     const month = url.searchParams.get("month");
     const period = url.searchParams.get("period") || "YTD2026";
-    const channel = url.searchParams.get("channel") || "ALL";
+    const requestedChannel = url.searchParams.get("channel") || "ALL";
+    // Wellington / Collective classification is a Corro-only reporting filter.
+    // Cavali exports always remain unfiltered and store-wide.
+    const channel = store === "equestrian" ? requestedChannel : "ALL";
     if (!["equestrian", "cavali"].includes(store) || !["FY2025", "YTD2026", "MONTH"].includes(period)
-      || !["ALL", "WELLINGTON", "COLLECTIVE", "UNCLASSIFIED"].includes(channel)) {
+      || !["ALL", "WELLINGTON", "COLLECTIVE"].includes(channel)) {
       return Response.json({ error: "Invalid export selection" }, { status: 400 });
     }
 
@@ -31,8 +34,7 @@ export async function onRequestGet(context) {
       const types = row.channelTypes || [];
       return channel === "ALL"
         || (channel === "WELLINGTON" && types.includes("WELLINGTON"))
-        || (channel === "COLLECTIVE" && types.includes("COLLECTIVE"))
-        || (channel === "UNCLASSIFIED" && types.length === 0);
+        || (channel === "COLLECTIVE" && types.includes("COLLECTIVE"));
     });
     const columns = [
       "Rank", "SKU", "Product", "Category", "Vendor",

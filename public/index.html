@@ -42,7 +42,7 @@
         <div class="topbar-actions">
           <label class="period-control"><span>STORE</span><select id="store-select" aria-label="Store"><option value="equestrian">Corro</option><option value="cavali">Cavali</option></select></label>
           <label class="period-control"><span>MONTH / YEAR ARCHIVE</span><select id="month-select" aria-label="Archived month"><option value="">Latest available</option></select></label>
-          <label class="period-control"><span>SKU CHANNEL</span><select id="channel-select" aria-label="Filter SKUs by channel"><option value="ALL">All channels</option><option value="WELLINGTON">Wellington Warehouse</option><option value="COLLECTIVE">Shopify Collective</option><option value="UNCLASSIFIED">Other / Unclassified</option></select></label>
+          <label class="period-control" id="channel-control"><span>SKU CHANNEL</span><select id="channel-select" aria-label="Filter SKU Analysis by channel"><option value="ALL">All channels</option><option value="WELLINGTON">Wellington Warehouse</option><option value="COLLECTIVE">Shopify Collective</option></select></label>
           <label class="period-control">
             <span>REPORTING PERIOD</span>
             <select id="period-select" aria-label="Reporting period">
@@ -56,7 +56,7 @@
         </div>
       </header>
 
-      <div class="channel-filter-note" id="channel-filter-note">Channel filtering narrows the SKU list only; Shopify sales totals remain store-wide. Wellington uses order / fulfillment location evidence, while Shopify Collective uses explicit tags. Online fulfillment-only Wellington orders may be unclassified if the app lacks fulfillment-order access.</div>
+      <div class="channel-filter-note" id="channel-filter-note">This Corro-only filter changes the SKU Analysis table and CSV export only. Executive KPIs, sales reconciliation, concentration charts and gross margin remain unchanged and store-wide. Wellington uses order / fulfillment location evidence; Shopify Collective uses explicit tags.</div>
 
       <div class="report-data-warning" id="report-data-warning" hidden>
         <strong>Data refresh required</strong>

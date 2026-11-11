@@ -175,3 +175,8 @@ No additional GitHub Secrets or Cloudflare variables are required.
 
 
 For complete online fulfillment-location coverage, the Shopify custom app should also have an applicable Fulfillment Orders read scope (for example `read_merchant_managed_fulfillment_orders` and/or `read_assigned_fulfillment_orders`, depending on the store's fulfillment setup). The refresh workflow detects missing scope access and retries the metadata export without fulfillment-order fields instead of failing. No additional token Secret names are required; if Shopify requires app reinstallation, update the value in the existing store token Secret.
+
+
+## Corro-only SKU channel filter
+
+The SKU Channel selector is available only when the Corro store is selected. Its options are All channels, Wellington Warehouse and Shopify Collective. It filters the SKU Analysis table and CSV export only. Executive KPIs, Shopify sales reconciliation, full-catalog concentration charts, year comparison and gross-margin panels remain store-wide and are not recalculated by this selector. Cavali does not display the channel selector.

@@ -527,3 +527,6 @@ tbody tr:hover { background: var(--surface-soft); }
   .topbar-actions { flex-wrap: wrap; }
   .channel-filter-note { margin-top: 0; }
 }
+
+/* The channel selector is only available for Corro. */
+#channel-control[hidden], #channel-filter-note[hidden] { display: none !important; }
