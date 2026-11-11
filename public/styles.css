@@ -502,3 +502,28 @@ tbody tr:hover { background: var(--surface-soft); }
   font-size: 11px;
   line-height: 1.55;
 }
+
+/* SKU channel selector and evidence labels */
+.channel-filter-note {
+  margin: -7px 0 14px;
+  color: var(--text-muted, #7b8491);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.channel-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 4px 7px;
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 6px;
+  background: var(--surface-muted, #f3f5f7);
+  color: var(--text, #20242a);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+}
+@media (max-width: 1100px) {
+  .topbar-actions { flex-wrap: wrap; }
+  .channel-filter-note { margin-top: 0; }
+}

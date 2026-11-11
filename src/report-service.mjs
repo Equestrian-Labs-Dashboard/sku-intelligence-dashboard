@@ -28,6 +28,16 @@ function monthPeriod(year, month) {
   return { key: 'MONTH', label, startDate, endDateExclusive, cutoffDate };
 }
 
+function orderBelongsToPeriod(order, period) {
+  const start = new Date(`${period.startDate}T00:00:00Z`).getTime();
+  const end = new Date(`${period.endDateExclusive}T00:00:00Z`).getTime();
+  return [order?.createdAt, order?.updatedAt].some((value) => {
+    if (!value) return false;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) && timestamp >= start && timestamp < end;
+  });
+}
+
 export async function refreshAndSaveReport(config) {
   await mkdir(ARCHIVE_DIR, { recursive: true });
   const periods = getReportPeriods(new Date(), config.reportTimezone);
@@ -73,7 +83,12 @@ export async function refreshAndSaveReport(config) {
       YTD2026: ytd2026Sales.unassigned,
       MONTH: currentMonthSales.unassigned
     };
-    const metadataOrdersByPeriod = { FY2025: fy2025Orders, YTD2026: ytd2026Orders };
+    const currentMonthMetadataOrders = metadataOrders.filter((order) => orderBelongsToPeriod(order, periods.MONTH));
+    const metadataOrdersByPeriod = {
+      FY2025: fy2025Orders,
+      YTD2026: ytd2026Orders,
+      MONTH: currentMonthMetadataOrders
+    };
     const report = buildReport(salesByPeriod, metadataOrdersByPeriod, periods, {
       dropshipTags: config.dropshipTags,
       timezone: config.reportTimezone,
@@ -98,7 +113,7 @@ export async function refreshAndSaveReport(config) {
       const period = monthPeriod(year, month);
       const monthlyReport = buildPeriodReport(
         salesResult.rows,
-        metadataOrders,
+        metadataOrders.filter((order) => orderBelongsToPeriod(order, period)),
         period,
         {
           dropshipTags: config.dropshipTags,

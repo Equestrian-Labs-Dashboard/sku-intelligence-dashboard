@@ -11,7 +11,9 @@ export async function onRequestGet(context) {
     const store = url.searchParams.get("store") || "equestrian";
     const month = url.searchParams.get("month");
     const period = url.searchParams.get("period") || "YTD2026";
-    if (!["equestrian", "cavali"].includes(store) || !["FY2025", "YTD2026", "MONTH"].includes(period)) {
+    const channel = url.searchParams.get("channel") || "ALL";
+    if (!["equestrian", "cavali"].includes(store) || !["FY2025", "YTD2026", "MONTH"].includes(period)
+      || !["ALL", "WELLINGTON", "COLLECTIVE", "UNCLASSIFIED"].includes(channel)) {
       return Response.json({ error: "Invalid export selection" }, { status: 400 });
     }
 
@@ -24,12 +26,19 @@ export async function onRequestGet(context) {
       report = latest?.stores?.[store]?.report;
     }
 
-    const rows = report?.periods?.[period]?.skuRows || [];
+    const allRows = report?.periods?.[period]?.skuRows || [];
+    const rows = allRows.filter((row) => {
+      const types = row.channelTypes || [];
+      return channel === "ALL"
+        || (channel === "WELLINGTON" && types.includes("WELLINGTON"))
+        || (channel === "COLLECTIVE" && types.includes("COLLECTIVE"))
+        || (channel === "UNCLASSIFIED" && types.length === 0);
+    });
     const columns = [
       "Rank", "SKU", "Product", "Category", "Vendor",
       "Quantity Ordered", "Net Items Sold", "Reversed Quantity",
       "Gross Sales", "Discounts", "Sales Reversals", "Net Sales",
-      "Sales Share (%)", "Cumulative Share (%)",
+      "SKU Channel", "Channel Evidence", "Sales Share (%)", "Cumulative Share (%)",
       "Gross Profit", "Gross Margin (%)", "Available Inventory",
       "Dropshipping", "Fulfillment Classification"
     ];
@@ -37,6 +46,7 @@ export async function onRequestGet(context) {
       row.rank ?? "", row.sku, row.productTitle, row.category, row.vendor,
       row.quantityOrdered, row.netItemsSold, row.reversedQuantity,
       row.grossSales, row.discounts, row.salesReversals, row.netSales,
+      row.channelLabel || "Other / Unclassified", (row.channelEvidence || []).join(" | "),
       row.salesShare, row.cumulativeShare, row.grossProfit, row.grossMargin ?? "",
       row.inventoryAvailable ?? "Not synced", row.isDropship ? "Yes" : "No", row.action
     ]);
@@ -44,7 +54,7 @@ export async function onRequestGet(context) {
     return new Response("\uFEFF" + csv, {
       headers: {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="sku-${store}-${period.toLowerCase()}.csv"`,
+        "content-disposition": `attachment; filename="sku-${store}-${period.toLowerCase()}-${channel.toLowerCase()}.csv"`,
         "cache-control": "private, no-store"
       }
     });

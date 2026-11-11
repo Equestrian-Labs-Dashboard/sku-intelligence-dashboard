@@ -4,7 +4,7 @@ import { assertShopifyConfig } from '../config.mjs';
 // fields such as Order.refunds. Refund details are intentionally not requested
 // here; see report data-quality notes so the report never implies refunds were
 // included in net sales.
-const BULK_QUERY = (search) => `
+const BULK_QUERY = (search, includeFulfillmentOrders = true) => `
 {
   orders(query: ${JSON.stringify(search)}, first: 250) {
     edges {
@@ -17,6 +17,30 @@ const BULK_QUERY = (search) => `
         cancelledAt
         currencyCode
         tags
+        retailLocation { id name }
+        physicalLocation { id name }
+        ${includeFulfillmentOrders ? `fulfillmentOrders(first: 250) {
+          pageInfo { hasNextPage }
+          edges {
+            node {
+              __typename
+              id
+              assignedLocation { name }
+              lineItems(first: 250) {
+                pageInfo { hasNextPage }
+                edges {
+                  node {
+                    __typename
+                    id
+                    totalQuantity
+                    remainingQuantity
+                    lineItem { id sku }
+                  }
+                }
+              }
+            }
+          }
+        }` : ''}
         lineItems(first: 250) {
           edges {
             node {
@@ -72,8 +96,8 @@ async function graphql(config, query, variables = {}) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function runBulkQuery(config, search) {
-  const query = BULK_QUERY(search);
+async function runBulkQuery(config, search, includeFulfillmentOrders = true) {
+  const query = BULK_QUERY(search, includeFulfillmentOrders);
   const start = await graphql(config, `
     mutation StartSkuBulkQuery($query: String!) {
       bulkOperationRunQuery(query: $query) {
@@ -131,8 +155,18 @@ function reconstructOrders(records) {
     delete clean.__parentId;
     if (clean.__typename === 'Order') {
       clean.lineItems = { nodes: [] };
+      clean.fulfillmentOrders = { nodes: [] };
       objects.set(clean.id, clean);
       roots.push(clean);
+    } else if (clean.__typename === 'FulfillmentOrder') {
+      clean.lineItems = { nodes: [] };
+      const parent = objects.get(record.__parentId);
+      if (parent) parent.fulfillmentOrders.nodes.push(clean);
+      objects.set(clean.id, clean);
+    } else if (clean.__typename === 'FulfillmentOrderLineItem') {
+      const parent = objects.get(record.__parentId);
+      if (parent) parent.lineItems.nodes.push(clean);
+      objects.set(clean.id, clean);
     } else if (clean.__typename === 'LineItem') {
       const parent = objects.get(record.__parentId);
       if (parent) parent.lineItems.nodes.push(clean);
@@ -143,8 +177,33 @@ function reconstructOrders(records) {
 }
 
 async function fetchOrdersBySearch(config, search) {
-  const records = await runBulkQuery(config, search);
-  return reconstructOrders(records);
+  let records;
+  let fulfillmentOrderAccess = true;
+  try {
+    records = await runBulkQuery(config, search, true);
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (!/fulfillment.?orders|assigned.?location|assigned.?fulfillment|read_assigned_fulfillment_orders|read_merchant_managed_fulfillment_orders|read_third_party_fulfillment_orders|access[_ ]denied|not authorized|scope/i.test(message)) {
+      throw error;
+    }
+    // Keep the report usable if the custom app does not yet have fulfillment-order
+    // scopes. POS retailLocation and explicit Collective tags remain available.
+    console.warn(`[Shopify channel metadata] Fulfillment-order access is unavailable for ${config.shopifyStore}; using retail-location and explicit Collective tag evidence. Details: ${message}`);
+    fulfillmentOrderAccess = false;
+    records = await runBulkQuery(config, search, false);
+  }
+  const orders = reconstructOrders(records);
+  for (const order of orders) {
+    order.fulfillmentOrderAccessAvailable = fulfillmentOrderAccess;
+    if (fulfillmentOrderAccess) {
+      for (const fulfillmentOrder of order.fulfillmentOrders?.nodes || []) {
+        if (fulfillmentOrder.pageInfo?.hasNextPage || fulfillmentOrder.lineItems?.pageInfo?.hasNextPage) {
+          throw new Error(`Order ${order.name || order.id} has more than 250 fulfillment orders or fulfillment line items. Channel classification cannot be completed safely; increase the relevant Bulk page size before publishing.`);
+        }
+      }
+    }
+  }
+  return orders;
 }
 
 export async function fetchShopifyOrdersForPeriod(config, period) {

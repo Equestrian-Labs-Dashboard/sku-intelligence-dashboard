@@ -42,6 +42,7 @@
         <div class="topbar-actions">
           <label class="period-control"><span>STORE</span><select id="store-select" aria-label="Store"><option value="equestrian">Corro</option><option value="cavali">Cavali</option></select></label>
           <label class="period-control"><span>MONTH / YEAR ARCHIVE</span><select id="month-select" aria-label="Archived month"><option value="">Latest available</option></select></label>
+          <label class="period-control"><span>SKU CHANNEL</span><select id="channel-select" aria-label="Filter SKUs by channel"><option value="ALL">All channels</option><option value="WELLINGTON">Wellington Warehouse</option><option value="COLLECTIVE">Shopify Collective</option><option value="UNCLASSIFIED">Other / Unclassified</option></select></label>
           <label class="period-control">
             <span>REPORTING PERIOD</span>
             <select id="period-select" aria-label="Reporting period">
@@ -54,6 +55,8 @@
           <button class="button button-primary" id="refresh-button" type="button"><span class="button-icon">◷</span><span>Monthly auto-refresh</span></button>
         </div>
       </header>
+
+      <div class="channel-filter-note" id="channel-filter-note">Channel filtering narrows the SKU list only; Shopify sales totals remain store-wide. Wellington uses order / fulfillment location evidence, while Shopify Collective uses explicit tags. Online fulfillment-only Wellington orders may be unclassified if the app lacks fulfillment-order access.</div>
 
       <div class="report-data-warning" id="report-data-warning" hidden>
         <strong>Data refresh required</strong>
@@ -180,9 +183,9 @@
                 <th>NET ITEMS SOLD <button class="help-button" type="button" data-help="net-items" aria-label="Explain net items sold">i</button></th>
                 <th>REVERSED QTY <button class="help-button" type="button" data-help="reversed-quantity" aria-label="Explain reversed quantity">i</button></th>
                 <th>GROSS SALES <button class="help-button" type="button" data-help="gross-sales" aria-label="Explain gross sales">i</button></th><th>DISCOUNTS <button class="help-button" type="button" data-help="discounts" aria-label="Explain discounts">i</button></th><th>SALES REVERSALS <button class="help-button" type="button" data-help="sales-reversals" aria-label="Explain sales reversals">i</button></th>
-                <th>NET SALES</th><th>SALES SHARE</th><th>CUMULATIVE <button class="help-button" type="button" data-help="concentration" aria-label="Explain cumulative sales share">i</button></th><th>GROSS MARGIN <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></th><th>AVAILABLE</th><th>FULFILLMENT</th>
+                <th>NET SALES</th><th>SKU CHANNEL <button class="help-button" type="button" data-help="sku-channel" aria-label="Explain SKU channel classification">i</button></th><th>SALES SHARE</th><th>CUMULATIVE <button class="help-button" type="button" data-help="concentration" aria-label="Explain cumulative sales share">i</button></th><th>GROSS MARGIN <button class="help-button" type="button" data-help="gross-margin" aria-label="Explain gross margin">i</button></th><th>AVAILABLE</th><th>FULFILLMENT</th>
               </tr></thead>
-              <tbody id="sku-table-body"><tr><td colspan="14" class="empty-cell">Loading product data…</td></tr></tbody>
+              <tbody id="sku-table-body"><tr><td colspan="15" class="empty-cell">Loading product data…</td></tr></tbody>
             </table>
           </div>
           <div class="table-footer"><span id="table-footnote">Sales metrics are sourced directly from ShopifyQL. SKU count is distinct variant codes, not units.</span><span class="pagination-controls"><button class="button button-secondary" id="table-prev" type="button" disabled>Previous</button><span id="table-pagination">—</span><button class="button button-secondary" id="table-next" type="button" disabled>Next</button></span></div>

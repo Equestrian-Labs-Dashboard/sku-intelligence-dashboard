@@ -29,7 +29,56 @@ function isDropshipLine(order, line, configuredTags) {
   });
 }
 
-function metadataBySku(orders, configuredTags) {
+function normalizeTag(value) {
+  return String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+function isShopifyCollective(order, line) {
+  // Follow the Wellington Commissions audit convention: Shopify Collective is
+  // identified from explicit Shopify Collective tags, not inferred from source/app.
+  const tags = [
+    ...(Array.isArray(order?.tags) ? order.tags : []),
+    ...(Array.isArray(line?.product?.tags) ? line.product.tags : [])
+  ].map(normalizeTag);
+  return tags.includes('shopify collective');
+}
+
+function isWellingtonLocation(name, configuredName = 'New Wellington Warehouse') {
+  const value = String(name || '').trim().toLowerCase();
+  if (!value) return false;
+  return value.includes(String(configuredName || 'New Wellington Warehouse').trim().toLowerCase())
+    || /\bwellington\b/.test(value);
+}
+
+function getOrderRetailLocationNames(order) {
+  return [order?.retailLocation?.name, order?.physicalLocation?.name]
+    .map((name) => String(name || '').trim()).filter(Boolean);
+}
+
+function getLineWellingtonEvidence(order, line, wellingtonLocationName) {
+  const evidence = [];
+  // retailLocation (current field) / physicalLocation (legacy fallback) identifies
+  // the physical POS location where the order was created or completed.
+  for (const name of getOrderRetailLocationNames(order)) {
+    if (isWellingtonLocation(name, wellingtonLocationName)) evidence.push(`Order retail location: ${name}`);
+  }
+
+  // For online or split-fulfillment orders, classify the SKU using the exact
+  // fulfillment-order line item association rather than applying one order's
+  // warehouse to every product in a mixed-location order.
+  const lineId = line?.id;
+  if (lineId) {
+    for (const fulfillmentOrder of order?.fulfillmentOrders?.nodes || []) {
+      const locationName = fulfillmentOrder?.assignedLocation?.name || '';
+      if (!isWellingtonLocation(locationName, wellingtonLocationName)) continue;
+      const belongsToLine = (fulfillmentOrder?.lineItems?.nodes || []).some((item) => item?.lineItem?.id === lineId);
+      if (belongsToLine) evidence.push(`Fulfillment location: ${locationName}`);
+    }
+  }
+  return [...new Set(evidence)];
+}
+
+function metadataBySku(orders, configuredTags, wellingtonLocationName) {
   const map = new Map();
   for (const order of orders || []) {
     for (const line of order?.lineItems?.nodes || []) {
@@ -37,16 +86,36 @@ function metadataBySku(orders, configuredTags) {
       if (!sku) continue;
       const previous = map.get(sku) || {};
       const unitCost = getUnitCost(line);
+      const channelTypes = new Set(previous.channelTypes || []);
+      const channelEvidence = new Set(previous.channelEvidence || []);
+      const wellingtonEvidence = getLineWellingtonEvidence(order, line, wellingtonLocationName);
+      if (wellingtonEvidence.length) channelTypes.add('WELLINGTON');
+      for (const item of wellingtonEvidence) channelEvidence.add(item);
+      if (isShopifyCollective(order, line)) {
+        channelTypes.add('COLLECTIVE');
+        channelEvidence.add('Explicit Shopify Collective order/product tag');
+      }
       map.set(sku, {
         productTitle: line?.product?.title || line?.title || previous.productTitle || sku,
         category: line?.product?.productType || previous.category || 'Uncategorized',
         vendor: line?.product?.vendor || previous.vendor || '—',
         unitCost: unitCost ?? previous.unitCost ?? null,
-        isDropship: Boolean(previous.isDropship || isDropshipLine(order, line, configuredTags))
+        isDropship: Boolean(previous.isDropship || isDropshipLine(order, line, configuredTags)),
+        channelTypes: [...channelTypes],
+        channelEvidence: [...channelEvidence],
+        fulfillmentOrderEvidenceAvailable: Boolean(previous.fulfillmentOrderEvidenceAvailable || order.fulfillmentOrderAccessAvailable)
       });
     }
   }
   return map;
+}
+
+function channelLabel(channelTypes) {
+  const types = new Set(channelTypes || []);
+  if (types.has('WELLINGTON') && types.has('COLLECTIVE')) return 'Wellington Warehouse + Shopify Collective';
+  if (types.has('WELLINGTON')) return 'Wellington Warehouse';
+  if (types.has('COLLECTIVE')) return 'Shopify Collective';
+  return 'Other / Unclassified';
 }
 
 function marginForRows(rows) {
@@ -113,7 +182,7 @@ function aggregateShopifyRows(salesRows) {
 
 export function buildPeriodReport(salesRows, metadataOrders, period, options = {}) {
   const configuredTags = options.dropshipTags || ['dropship', 'dropshipping'];
-  const metadata = metadataBySku(metadataOrders, configuredTags);
+  const metadata = metadataBySku(metadataOrders, configuredTags, options.wellingtonLocationName);
   const currency = options.currencyCode || 'USD';
   const aggregated = aggregateShopifyRows(salesRows);
   const unassignedSales = {
@@ -145,6 +214,9 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
       grossProfit: round(grossProfit),
       grossMargin: costKnownSales > 0 ? round((grossProfit / costKnownSales) * 100) : null,
       isDropship: Boolean(meta.isDropship),
+      channelTypes: meta.channelTypes || [],
+      channelLabel: channelLabel(meta.channelTypes || []),
+      channelEvidence: meta.channelEvidence || [],
       inventoryAvailable: null,
       currency
     };
@@ -227,17 +299,16 @@ export function buildPeriodReport(salesRows, metadataOrders, period, options = {
       productGrouping: 'The report counts variant SKUs. A product-level Shopify report can combine multiple variants, so product totals and SKU totals are not always directly comparable.',
       costBasis: 'Gross margin uses the current Shopify unit cost where available, multiplied by net items sold. Historical unit costs are not reconstructed.',
       inventoryBasis: 'Available inventory is not currently synchronized; it is shown as unavailable rather than zero.',
+      channelBasis: 'Wellington Warehouse is identified from the order retailLocation/legacy physicalLocation or the exact FulfillmentOrder line-item assigned location. Shopify Collective is identified only from an explicit Shopify Collective order or product tag. A SKU may be associated with both. If fulfillment-order scopes are unavailable, online fulfillment-only Wellington evidence cannot be assigned; POS retail-location and Collective tag evidence remain available. Channel labels classify SKU evidence; ShopifyQL SKU sales totals are not split or reallocated by channel.',
       concentrationBasis: 'The full assigned-SKU catalog is ranked by actual net sales. No fixed 80/20 distribution is assumed. Unassigned-SKU sales remain visible in total sales and are not attributed to a SKU.'
     }
   };
 }
 
 export function buildReport(salesByPeriod, metadataOrdersByPeriod, periods, options = {}) {
-  const metadataOrders = [...(metadataOrdersByPeriod.FY2025 || []), ...(metadataOrdersByPeriod.YTD2026 || [])];
-  const metadata = metadataOrders;
   const build = (key) => buildPeriodReport(
     salesByPeriod[key] || [],
-    metadata,
+    metadataOrdersByPeriod[key] || [],
     periods[key],
     { ...options, unassignedSales: options.unassignedByPeriod?.[key] || options.unassignedSales }
   );

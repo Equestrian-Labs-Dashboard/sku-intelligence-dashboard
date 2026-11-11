@@ -158,3 +158,20 @@ The dashboard includes click-to-open explanations beside important metrics. Thes
 - Historical gross margin can differ if current unit costs are not the same as costs at the time of sale.
 
 These explanations help users compare the dashboard with Shopify using the same reporting dimension, period and filters.
+
+
+## SKU channel filter: Wellington Warehouse and Shopify Collective
+
+The dashboard includes a SKU channel filter with these options: All channels, Wellington Warehouse, Shopify Collective, and Other / Unclassified. There is no Concierge classification.
+
+- **Wellington Warehouse** is identified from the order's current `retailLocation` (with legacy `physicalLocation` as a fallback) or from the assigned location of the exact `FulfillmentOrderLineItem` associated with that SKU. This avoids assigning a mixed-location order's warehouse to every line item.
+- **Shopify Collective** is identified only from an explicit `Shopify Collective` tag on the order or product (case-insensitive; spaces, hyphens and underscores are normalized).
+- A SKU can have evidence for both channels and will appear in either corresponding filter. SKUs without either signal are Other / Unclassified.
+- If the Shopify app does not have the fulfillment-order read scopes, the Bulk export falls back to retail-location and explicit tag evidence. In that case, online fulfillment-only Wellington orders may remain unclassified.
+
+The channel filter narrows the SKU table only. It does not reallocate ShopifyQL financial totals by channel: ShopifyQL sales metrics in this report are grouped by SKU for the whole store, while Wellington/Collective evidence is obtained from order and fulfillment metadata. This distinction is displayed in the dashboard so users do not mistake store-wide SKU sales for channel-only sales.
+
+No additional GitHub Secrets or Cloudflare variables are required.
+
+
+For complete online fulfillment-location coverage, the Shopify custom app should also have an applicable Fulfillment Orders read scope (for example `read_merchant_managed_fulfillment_orders` and/or `read_assigned_fulfillment_orders`, depending on the store's fulfillment setup). The refresh workflow detects missing scope access and retries the metadata export without fulfillment-order fields instead of failing. No additional token Secret names are required; if Shopify requires app reinstallation, update the value in the existing store token Secret.

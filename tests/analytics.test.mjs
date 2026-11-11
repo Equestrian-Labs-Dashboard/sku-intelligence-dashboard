@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPeriodReport } from '../src/analytics.mjs';
+import { buildPeriodReport, buildReport } from '../src/analytics.mjs';
 import { getReportPeriods } from '../src/periods.mjs';
 
 const period = {
@@ -13,6 +13,7 @@ const period = {
 
 function metadataLine({ sku, title = sku, cost = 10, tags = [] }) {
   return {
+    id: `line-${sku}`,
     sku,
     title,
     product: { title, tags, productType: 'Test category', vendor: 'Test vendor' },
@@ -21,8 +22,8 @@ function metadataLine({ sku, title = sku, cost = 10, tags = [] }) {
   };
 }
 
-function metadataOrder(lines, tags = []) {
-  return { id: 'order-1', tags, lineItems: { nodes: lines } };
+function metadataOrder(lines, tags = [], extra = {}) {
+  return { id: 'order-1', tags, lineItems: { nodes: lines }, ...extra };
 }
 
 function salesRow({
@@ -173,4 +174,82 @@ test('keeps blank-SKU product sales in financial totals without counting them as
   assert.equal(report.summary.netItemsSold, 2);
   assert.equal(report.summary.unassignedSkuSales.netSales, 43);
   assert.match(report.dataQuality.unassignedSkuBasis, /blank product_variant_sku/i);
+});
+
+
+test('classifies Wellington from POS retail location and Shopify Collective from explicit tags', () => {
+  const sales = [
+    salesRow({ sku: 'WELL-1', grossSales: 100, discounts: 0, salesReversals: 0, netSales: 100, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 }),
+    salesRow({ sku: 'COL-1', grossSales: 80, discounts: 0, salesReversals: 0, netSales: 80, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 }),
+    salesRow({ sku: 'UNKNOWN-1', grossSales: 50, discounts: 0, salesReversals: 0, netSales: 50, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 })
+  ];
+  const metadata = [
+    metadataOrder([metadataLine({ sku: 'WELL-1' })], [], { retailLocation: { id: 'loc-1', name: 'New Wellington Warehouse' } }),
+    metadataOrder([metadataLine({ sku: 'COL-1', tags: ['Shopify Collective'] })]),
+    metadataOrder([metadataLine({ sku: 'UNKNOWN-1' })])
+  ];
+  const report = buildPeriodReport(sales, metadata, period);
+  assert.equal(report.skuRows.find((row) => row.sku === 'WELL-1').channelLabel, 'Wellington Warehouse');
+  assert.equal(report.skuRows.find((row) => row.sku === 'COL-1').channelLabel, 'Shopify Collective');
+  assert.equal(report.skuRows.find((row) => row.sku === 'UNKNOWN-1').channelLabel, 'Other / Unclassified');
+});
+
+test('classifies fulfillment location per line item in mixed-location orders', () => {
+  const sales = [
+    salesRow({ sku: 'WELL-LINE', grossSales: 100, discounts: 0, salesReversals: 0, netSales: 100, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 }),
+    salesRow({ sku: 'OTHER-LINE', grossSales: 90, discounts: 0, salesReversals: 0, netSales: 90, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 })
+  ];
+  const order = metadataOrder([
+    metadataLine({ sku: 'WELL-LINE' }),
+    metadataLine({ sku: 'OTHER-LINE' })
+  ], [], {
+    fulfillmentOrderAccessAvailable: true,
+    fulfillmentOrders: { nodes: [
+      {
+        assignedLocation: { name: 'New Wellington Warehouse' },
+        lineItems: { nodes: [{ lineItem: { id: 'line-WELL-LINE' } }] }
+      },
+      {
+        assignedLocation: { name: 'Kensington' },
+        lineItems: { nodes: [{ lineItem: { id: 'line-OTHER-LINE' } }] }
+      }
+    ] }
+  });
+  const report = buildPeriodReport(sales, [order], period);
+  assert.equal(report.skuRows.find((row) => row.sku === 'WELL-LINE').channelLabel, 'Wellington Warehouse');
+  assert.equal(report.skuRows.find((row) => row.sku === 'OTHER-LINE').channelLabel, 'Other / Unclassified');
+});
+
+test('a SKU with evidence in both channels appears as multi-channel', () => {
+  const sales = [salesRow({ sku: 'BOTH', grossSales: 100, discounts: 0, salesReversals: 0, netSales: 100, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 })];
+  const metadata = [
+    metadataOrder([metadataLine({ sku: 'BOTH' })], [], { retailLocation: { name: 'New Wellington Warehouse' } }),
+    metadataOrder([metadataLine({ sku: 'BOTH', tags: ['shopify-collective'] })])
+  ];
+  const report = buildPeriodReport(sales, metadata, period);
+  const row = report.skuRows[0];
+  assert.deepEqual(new Set(row.channelTypes), new Set(['WELLINGTON', 'COLLECTIVE']));
+  assert.equal(row.channelLabel, 'Wellington Warehouse + Shopify Collective');
+});
+
+
+test('keeps channel evidence scoped to each reporting period instead of blending years', () => {
+  const periods = {
+    FY2025: { ...period, key: 'FY2025', label: 'Full Year 2025' },
+    YTD2026: { ...period, key: 'YTD2026', label: '2026 Year to Date' },
+    MONTH: { ...period, key: 'MONTH', label: 'Selected Month' }
+  };
+  const sameSkuSales = [salesRow({ sku: 'SAME-SKU', grossSales: 100, discounts: 0, salesReversals: 0, netSales: 100, quantityOrdered: 1, netItemsSold: 1, reversedQuantity: 0 })];
+  const report = buildReport(
+    { FY2025: sameSkuSales, YTD2026: sameSkuSales, MONTH: sameSkuSales },
+    {
+      FY2025: [metadataOrder([metadataLine({ sku: 'SAME-SKU' })], [], { retailLocation: { name: 'New Wellington Warehouse' } })],
+      YTD2026: [metadataOrder([metadataLine({ sku: 'SAME-SKU', tags: ['Shopify Collective'] })])],
+      MONTH: []
+    },
+    periods
+  );
+  assert.equal(report.periods.FY2025.skuRows[0].channelLabel, 'Wellington Warehouse');
+  assert.equal(report.periods.YTD2026.skuRows[0].channelLabel, 'Shopify Collective');
+  assert.equal(report.periods.MONTH.skuRows[0].channelLabel, 'Other / Unclassified');
 });

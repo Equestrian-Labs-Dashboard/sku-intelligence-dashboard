@@ -8,7 +8,8 @@ const state = {
   storeKey: 'equestrian',
   monthKey: '',
   visibleRows: [],
-  tablePage: 0
+  tablePage: 0,
+  channelFilter: 'ALL'
 };
 
 function escapeHtml(value) {
@@ -175,10 +176,16 @@ function actionClass(action) {
 function renderTable(periodReport) {
   const search = ($('#sku-search').value || '').trim().toLowerCase();
   const action = $('#action-filter').value;
+  const channel = state.channelFilter;
   const rows = (periodReport.skuRows || []).filter((row) => {
     const matchesSearch = !search || `${row.sku} ${row.productTitle} ${row.category} ${row.vendor}`.toLowerCase().includes(search);
     const matchesAction = action === 'ALL' || row.action === action;
-    return matchesSearch && matchesAction;
+    const channelTypes = row.channelTypes || [];
+    const matchesChannel = channel === 'ALL'
+      || (channel === 'WELLINGTON' && channelTypes.includes('WELLINGTON'))
+      || (channel === 'COLLECTIVE' && channelTypes.includes('COLLECTIVE'))
+      || (channel === 'UNCLASSIFIED' && channelTypes.length === 0);
+    return matchesSearch && matchesAction && matchesChannel;
   });
   state.visibleRows = rows;
   const pageSize = 50;
@@ -192,7 +199,7 @@ function renderTable(periodReport) {
   $('#table-next').disabled = state.tablePage >= pageCount - 1;
   const body = $('#sku-table-body');
   if (!pageRows.length) {
-    body.innerHTML = '<tr><td colspan="14" class="empty-cell">No products match the current filters.</td></tr>';
+    body.innerHTML = '<tr><td colspan="15" class="empty-cell">No products match the current filters.</td></tr>';
     return;
   }
   body.innerHTML = pageRows.map((row) => `
@@ -206,6 +213,7 @@ function renderTable(periodReport) {
       <td class="numeric">${currency(row.discounts, periodReport.summary.currency)}</td>
       <td class="numeric">${currency(row.salesReversals, periodReport.summary.currency)}</td>
       <td class="numeric">${currency(row.netSales, periodReport.summary.currency)}</td>
+      <td><span class="channel-pill">${escapeHtml(row.channelLabel || 'Other / Unclassified')}</span></td>
       <td class="share-cell numeric">${percentage(row.salesShare, 2)}<div class="mini-bar"><span style="width:${Math.max(0, Math.min(100, Number(row.salesShare) || 0))}%"></span></div></td>
       <td class="numeric">${percentage(row.cumulativeShare, 1)}</td>
       <td class="numeric">${percentage(row.grossMargin, 1)}</td>
@@ -382,7 +390,7 @@ function bindEvents() {
   });
   $('#refresh-button').addEventListener('click', refreshData);
   $('#export-button').addEventListener('click', () => {
-    window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}`;
+    window.location.href = `/api/export.csv?store=${encodeURIComponent(state.storeKey)}&month=${encodeURIComponent(state.monthKey || $('#month-select').value)}&period=${encodeURIComponent(state.periodKey)}&channel=${encodeURIComponent(state.channelFilter)}`;
   });
   $('#sku-search').addEventListener('input', () => {
     state.tablePage = 0;
@@ -390,6 +398,12 @@ function bindEvents() {
     if (periodReport) renderTable(periodReport);
   });
   $('#action-filter').addEventListener('change', () => {
+    state.tablePage = 0;
+    const periodReport = getCurrentPeriod();
+    if (periodReport) renderTable(periodReport);
+  });
+  $('#channel-select').addEventListener('change', (event) => {
+    state.channelFilter = event.target.value;
     state.tablePage = 0;
     const periodReport = getCurrentPeriod();
     if (periodReport) renderTable(periodReport);
@@ -449,6 +463,10 @@ function bindEvents() {
     'concentration': {
       title: 'SKU sales concentration',
       body: `<p>All SKU records are ranked by net sales. The cumulative line shows how much of total net sales is accounted for as more SKUs are included.</p><p>No fixed 80/20 split is assumed and the chart is not limited to a Top 10. The entire SKU catalog is included in the calculation.</p><p>The Gini index compares how evenly sales are distributed across SKUs. Higher values mean a larger share of sales is concentrated in fewer SKUs.</p>`
+    },
+    'sku-channel': {
+      title: 'SKU channel classification',
+      body: `<p><strong>Wellington Warehouse:</strong> a SKU is associated with Wellington when its order's retail location (legacy physical location as a fallback) or the assigned location of that exact fulfillment-order line item identifies Wellington.</p><p><strong>Shopify Collective:</strong> a SKU is associated with Collective only when an explicit Shopify Collective tag is present on the order or product.</p><p>A SKU can have evidence for both channels. In that case it appears in both channel filters and is labelled as multiple-channel evidence. If neither type of evidence is available, it appears as Other / Unclassified.</p><p>If the Shopify app cannot read fulfillment orders, the workflow falls back to POS retail-location and explicit tag evidence. Online fulfillment-only Wellington lines may then remain unclassified.</p><p><strong>Important:</strong> this filter narrows the SKU table; it does not split or reallocate ShopifyQL sales totals by channel. The sales figures for a SKU remain the SKU's store-wide ShopifyQL totals.</p>`
     },
     'dropshipping': {
       title: 'Dropshipping classification',
